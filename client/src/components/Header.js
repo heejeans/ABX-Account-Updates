@@ -60,8 +60,9 @@ export default function Header({
         {/* Top row */}
         <div className="header__top">
           <div className="header__title">
+            <span className="header__cz-dot" />
             <span className="header__logo-cz">CloudZero</span>
-            <span className="header__logo-sep"> · </span>
+            <span className="header__logo-sep">·</span>
             <span className="header__logo-title">ABX Tier Review</span>
           </div>
           <div className="header__actions">

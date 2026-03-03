@@ -1,95 +1,122 @@
 .app {
   min-height: 100vh;
-  background: #f0f2f5;
+  background: var(--sf-bg);
 }
 
 .main-content {
-  padding: 16px 24px 40px;
+  padding: 16px 24px 48px;
   max-width: 1400px;
   margin: 0 auto;
 }
 
 .record-count {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 12px;
-  padding: 0 4px;
-}
-
-/* ===== BADGES ===== */
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
   font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
+  color: var(--sf-text-weak);
+  margin-bottom: 10px;
+  padding: 0 2px;
 }
 
-.badge-tier1 { background: #d1fae5; color: #065f46; }
-.badge-tier2 { background: #fef3c7; color: #92400e; }
-.badge-tier3 { background: #fef9c3; color: #713f12; }
-.badge-none  { background: #f3f4f6; color: #6b7280; }
+/* ── SLDS Badges / Pills ─────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  height: 20px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .025em;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
 
-.badge-add       { background: #dbeafe; color: #1d4ed8; }
-.badge-remove    { background: #fee2e2; color: #b91c1c; }
-.badge-reclassify { background: #ede9fe; color: #6d28d9; }
-.badge-nochange  { background: #f3f4f6; color: #6b7280; }
-.badge-ignore    { background: #f9fafb; color: #9ca3af; }
+/* Tier badges */
+.badge-tier1 { background: #d4f5e9; color: #014421; border: 1px solid #4bca81; }
+.badge-tier2 { background: #fce7b0; color: #3d2400; border: 1px solid #f4bc25; }
+.badge-tier3 { background: #fef3cd; color: #3c2600; border: 1px solid #f4bc25; }
+.badge-none  { background: #f3f2f1; color: var(--sf-text-weak); border: 1px solid var(--sf-border); }
 
-/* ===== FIT SCORE COLORS ===== */
-.fit-high   { color: #059669; font-weight: 700; }
-.fit-medium { color: #d97706; font-weight: 700; }
-.fit-low    { color: #eab308; font-weight: 700; }
-.fit-none   { color: #9ca3af; }
+/* Action badges */
+.badge-add        { background: #d4f5e9; color: #014421; border: 1px solid #4bca81; }
+.badge-remove     { background: #fcdbd9; color: #4f0000; border: 1px solid #e57373; }
+.badge-reclassify { background: #ece9f5; color: #3c0e7a; border: 1px solid #c3b8e3; }
+.badge-nochange   { background: #f3f2f1; color: var(--sf-text-weak); border: 1px solid var(--sf-border); }
+.badge-ignore     { background: #f3f2f1; color: #b0adab; border: 1px solid #e5e4e2; }
 
-/* ===== BUTTONS ===== */
+/* ── Fit score colors ─────────────────────────────────────────────────────── */
+.fit-high   { color: var(--sf-success); font-weight: 700; }
+.fit-medium { color: var(--sf-warning); font-weight: 700; }
+.fit-low    { color: #dd7a01; font-weight: 700; }
+.fit-none   { color: var(--sf-text-weak); }
+
+/* ── SLDS Buttons ─────────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 0 16px;
+  height: 32px;
+  border-radius: var(--sf-radius);
   font-size: 13px;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  border: none;
-  transition: all 0.15s;
+  border: 1px solid transparent;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+  white-space: nowrap;
 }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary   { background: #2563eb; color: #fff; }
-.btn-primary:hover:not(:disabled)   { background: #1d4ed8; }
-.btn-success   { background: #059669; color: #fff; }
-.btn-success:hover:not(:disabled)   { background: #047857; }
-.btn-danger    { background: #dc2626; color: #fff; }
-.btn-danger:hover:not(:disabled)    { background: #b91c1c; }
-.btn-secondary { background: #6b7280; color: #fff; }
-.btn-secondary:hover:not(:disabled) { background: #4b5563; }
-.btn-outline   { background: transparent; color: #374151; border: 1px solid #d1d5db; }
-.btn-outline:hover:not(:disabled)   { background: #f9fafb; }
-.btn-download  { background: #0d9488; color: #fff; }
-.btn-download:hover:not(:disabled)  { background: #0f766e; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:focus-visible { outline: 2px solid var(--sf-brand); outline-offset: 2px; }
 
+/* brand */
+.btn-primary  { background: var(--sf-brand); color: #fff; border-color: var(--sf-brand); }
+.btn-primary:hover:not(:disabled) { background: var(--sf-brand-dark); border-color: var(--sf-brand-dark); }
+
+/* neutral / outline */
+.btn-outline  { background: #fff; color: var(--sf-text-label); border-color: var(--sf-border); }
+.btn-outline:hover:not(:disabled) { background: #f3f2f1; border-color: #b0adab; }
+
+/* success */
+.btn-success  { background: var(--sf-success); color: #fff; border-color: var(--sf-success); }
+.btn-success:hover:not(:disabled) { background: #027340; }
+
+/* destructive */
+.btn-danger   { background: var(--sf-error); color: #fff; border-color: var(--sf-error); }
+.btn-danger:hover:not(:disabled) { background: #a61c17; }
+
+/* download / teal */
+.btn-download { background: #0b7477; color: #fff; border-color: #0b7477; }
+.btn-download:hover:not(:disabled) { background: #095e61; }
+
+/* approve / reject inline */
 .btn-approve {
-  padding: 4px 10px;
+  padding: 0 10px;
+  height: 24px;
   font-size: 12px;
-  background: #d1fae5;
-  color: #065f46;
-  border: 1px solid #6ee7b7;
-  border-radius: 4px;
+  font-family: inherit;
+  font-weight: 600;
+  background: #fff;
+  color: var(--sf-success);
+  border: 1px solid var(--sf-success);
+  border-radius: var(--sf-radius);
   cursor: pointer;
+  transition: background .15s;
 }
-.btn-approve:hover { background: #a7f3d0; }
-.btn-approve.active { background: #059669; color: #fff; }
+.btn-approve:hover { background: #d4f5e9; }
+.btn-approve.active { background: var(--sf-success); color: #fff; }
 
 .btn-reject {
-  padding: 4px 10px;
+  padding: 0 10px;
+  height: 24px;
   font-size: 12px;
-  background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-  border-radius: 4px;
+  font-family: inherit;
+  font-weight: 600;
+  background: #fff;
+  color: var(--sf-error);
+  border: 1px solid var(--sf-error);
+  border-radius: var(--sf-radius);
   cursor: pointer;
+  transition: background .15s;
 }
-.btn-reject:hover { background: #fecaca; }
-.btn-reject.active { background: #dc2626; color: #fff; }
+.btn-reject:hover { background: #fcdbd9; }
+.btn-reject.active { background: var(--sf-error); color: #fff; }

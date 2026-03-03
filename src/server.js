@@ -7,6 +7,7 @@ const cors = require('cors');
 const path = require('path');
 const { fetchAllAccounts } = require('./fetchData');
 const { processAccounts } = require('./tieringLogic');
+const { RAW_MOCK_ACCOUNTS } = require('./mockData');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,8 +19,11 @@ app.use(express.json());
 const buildPath = path.join(__dirname, '..', 'client', 'build');
 app.use(express.static(buildPath));
 
+// Auto-seed mock data when no real API key is present
+const USE_MOCK = !process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_anthropic_api_key_here' || process.env.MOCK === 'true';
+
 // In-memory state
-let accountsCache = null;
+let accountsCache = USE_MOCK ? processAccounts(RAW_MOCK_ACCOUNTS) : null;
 let isFetching = false;
 let fetchProgress = [];
 let fetchError = null;
@@ -174,5 +178,9 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\nABX Account Updates server running on http://localhost:${PORT}`);
-  console.log(`API key configured: ${process.env.ANTHROPIC_API_KEY ? 'YES' : 'NO — set ANTHROPIC_API_KEY in .env'}`);
+  if (USE_MOCK) {
+    console.log(`Mode: MOCK — ${accountsCache.length} sample accounts pre-loaded (no Salesforce connection needed)`);
+  } else {
+    console.log(`Mode: LIVE — API key configured, ready to fetch from Salesforce`);
+  }
 });

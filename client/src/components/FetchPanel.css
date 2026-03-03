@@ -1,106 +1,141 @@
+/* ── SLDS-style launch / fetch screen ────────────────────────────────────── */
 .fetch-panel {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  background: #f0f2f5;
+  background: var(--sf-bg);
+}
+
+/* Dark global nav strip at top */
+.fetch-panel::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 48px;
+  background: var(--sf-nav-bg);
+  z-index: 10;
 }
 
 .fetch-panel__card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  background: var(--sf-card-bg);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
   padding: 40px 48px;
-  max-width: 680px;
+  max-width: 640px;
   width: 100%;
+  position: relative;
+  z-index: 20;
+}
+
+/* Brand stripe at top of card */
+.fetch-panel__card::before {
+  content: '';
+  display: block;
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--sf-brand);
+  border-radius: var(--sf-radius) var(--sf-radius) 0 0;
 }
 
 .fetch-panel__logo {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
-  margin-bottom: 12px;
-  color: #111827;
+  margin-bottom: 6px;
 }
 
-.fetch-panel__logo-cz { color: #2563eb; }
-.fetch-panel__logo-sep { color: #9ca3af; }
-.fetch-panel__logo-title { color: #374151; }
+.fetch-panel__logo-cz    { color: var(--sf-brand); font-weight: 800; }
+.fetch-panel__logo-sep   { color: var(--sf-border); margin: 0 4px; }
+.fetch-panel__logo-title { color: var(--sf-text-label); }
+
+.fetch-panel__subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--sf-text-weak);
+  margin-bottom: 20px;
+}
 
 .fetch-panel__desc {
-  color: #6b7280;
-  font-size: 14px;
+  color: var(--sf-text-label);
+  font-size: 13px;
   line-height: 1.6;
   margin: 0 0 24px;
+  border-left: 3px solid var(--sf-brand);
+  padding-left: 12px;
+  background: #f0f7ff;
+  padding: 10px 14px 10px 14px;
+  border-radius: 0 var(--sf-radius) var(--sf-radius) 0;
 }
 
 .fetch-panel__error {
-  background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-  border-radius: 6px;
-  padding: 12px 16px;
+  background: #fcdbd9;
+  color: #4f0000;
+  border: 1px solid #e57373;
+  border-radius: var(--sf-radius);
+  padding: 10px 14px;
   font-size: 13px;
   margin-bottom: 16px;
+  border-left: 4px solid var(--sf-error);
 }
 
 .fetch-panel__btn {
   width: 100%;
   justify-content: center;
-  padding: 12px 24px;
-  font-size: 15px;
-  margin-bottom: 24px;
+  height: 40px;
+  font-size: 14px;
+  margin-bottom: 20px;
 }
 
-.fetch-panel__log-wrap {
-  margin-top: 8px;
-}
+/* ── Progress log (terminal) ──────────────────────────────────────────────── */
+.fetch-panel__log-wrap { margin-top: 4px; }
 
 .fetch-panel__log-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b7280;
+  letter-spacing: .07em;
+  color: var(--sf-text-weak);
   margin-bottom: 6px;
 }
 
 .fetch-panel__log {
-  background: #111827;
-  border-radius: 6px;
-  padding: 12px 16px;
-  height: 280px;
+  background: #16213e;
+  border: 1px solid #0a1128;
+  border-radius: var(--sf-radius);
+  padding: 12px 14px;
+  height: 260px;
   overflow-y: auto;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 11px;
-  line-height: 1.6;
-  color: #d1d5db;
+  line-height: 1.65;
+  color: #c5cae9;
 }
 
-.fetch-panel__log-line {
-  white-space: pre-wrap;
-  word-break: break-all;
-}
+.fetch-panel__log-line { white-space: pre-wrap; word-break: break-all; }
 
 .fetch-panel__log-cursor {
-  color: #10b981;
+  color: #64ffda;
   animation: blink 1s step-end infinite;
 }
 
-@keyframes blink {
-  50% { opacity: 0; }
-}
+@keyframes blink { 50% { opacity: 0; } }
 
+/* ── Spinner ──────────────────────────────────────────────────────────────── */
 .spinner {
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(255,255,255,0.4);
+  border: 2px solid rgba(255,255,255,.35);
   border-top-color: #fff;
   border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  animation: spin .65s linear infinite;
+  flex-shrink: 0;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }

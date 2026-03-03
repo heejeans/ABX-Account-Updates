@@ -42,14 +42,25 @@ const FIELD_LABELS = {
   Entered_Closed_Lost_Date__c: 'Entered Closed Lost Date',
 };
 
+const ACTION_CLASS = {
+  Add: 'account-card--add',
+  Remove: 'account-card--remove',
+  Reclassify: 'account-card--reclassify',
+  'No Change': 'account-card--nochange',
+  Ignore: 'account-card--ignore',
+};
+
 export default function AccountCard({ account, isApproved, isRejected, onApprove, onReject }) {
   const [expanded, setExpanded] = useState(false);
   const isActionable = account.action !== 'No Change' && account.action !== 'Ignore';
 
   const tierChanged = account.currentTier !== account.recommendedTier;
 
+  const actionCls = ACTION_CLASS[account.action] || '';
+  const stateCls = isApproved ? ' account-card--approved' : isRejected ? ' account-card--rejected' : '';
+
   return (
-    <div className={`account-card${isApproved ? ' account-card--approved' : ''}${isRejected ? ' account-card--rejected' : ''}`}>
+    <div className={`account-card ${actionCls}${stateCls}`}>
       <div className="account-card__main">
         {/* Left: name + badges */}
         <div className="account-card__info">
