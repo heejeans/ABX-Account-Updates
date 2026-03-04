@@ -17,6 +17,10 @@ const QUERIES = {
     label: 'Group 3 — Old Closed Lost candidates (no tier, before Aug 1 2025)',
     soql: `SELECT Id, Name, ABX_Tier__c, Fit_Score_Total__c, Account_Intent__c, Account_Stage__c, Sales_Segment__c, Marketplace_Prospect__c, Consulting_IT_Filter_Flow__c, Company_isDefunct__c, Qualified_Out_Detail__c, Qualified_Out_Date__c, Qualified_Out_Reason__c, ParentId, Entered_Closed_Lost_Date__c FROM Account WHERE IsDeleted = false AND ABX_Tier__c = null AND Fit_Score_Total__c >= 5 AND Account_Intent__c != null AND Account_Intent__c != 'None' AND ParentId = null AND Qualified_Out_Detail__c = null AND Qualified_Out_Date__c = null AND Qualified_Out_Reason__c = null AND Company_isDefunct__c != 'true' AND Consulting_IT_Filter_Flow__c = false AND Account_Stage__c = 'Closed Lost' AND Entered_Closed_Lost_Date__c < 2025-08-01 AND Sales_Segment__c != 'Commercial' ORDER BY Name`,
   },
+  group4: {
+    label: 'Group 4 — DNN/Marketplace Prospects without tier (low/no fit or intent)',
+    soql: `SELECT Id, Name, ABX_Tier__c, Fit_Score_Total__c, Account_Intent__c, Account_Stage__c, Sales_Segment__c, Marketplace_Prospect__c, Consulting_IT_Filter_Flow__c, Company_isDefunct__c, Qualified_Out_Detail__c, Qualified_Out_Date__c, Qualified_Out_Reason__c, ParentId, Entered_Closed_Lost_Date__c FROM Account WHERE IsDeleted = false AND ABX_Tier__c = null AND Marketplace_Prospect__c = true AND Account_Stage__c = 'Prospect' AND Sales_Segment__c != 'Commercial' AND ParentId = null AND Qualified_Out_Detail__c = null AND Qualified_Out_Date__c = null AND Qualified_Out_Reason__c = null AND Company_isDefunct__c != 'true' AND Consulting_IT_Filter_Flow__c = false AND (Fit_Score_Total__c < 5 OR Fit_Score_Total__c = null OR Account_Intent__c = null OR Account_Intent__c = 'None') ORDER BY Name`,
+  },
 };
 
 function sleep(ms) {
@@ -220,7 +224,7 @@ async function fetchAllAccounts(onProgress = console.log) {
   const allRecords = [];
   const seenIds = new Set();
 
-  for (const groupKey of ['group1', 'group2', 'group3']) {
+  for (const groupKey of ['group1', 'group2', 'group3', 'group4']) {
     onProgress(`\nStarting ${QUERIES[groupKey].label}...`);
     const records = await runQuery(client, mcpSession, groupKey, onProgress);
     let added = 0;

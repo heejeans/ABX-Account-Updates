@@ -60,6 +60,11 @@ function calcTierFromMatrix(account) {
   let matrixReason = '';
 
   if (isNaN(fit) || fit < 5) {
+    if (isDnn) {
+      // DNN/Marketplace accounts bypass the fit threshold — assign Tier 2 minimum
+      matrixReason = `DNN/Marketplace Prospect with fit score ${isNaN(fit) ? '(missing)' : fit} (below threshold) → Tier 2 (DNN minimum)`;
+      return { tier: 2, reason: matrixReason };
+    }
     matrixReason = `Fit score ${isNaN(fit) ? '(missing)' : fit} is below minimum threshold of 5 → Ignore`;
     return { tier: null, reason: matrixReason };
   }
@@ -83,6 +88,10 @@ function calcTierFromMatrix(account) {
       tier = 3;
       matrixReason = `Fit score ${fit} (9-10 range) + Medium intent → Tier 3`;
     } else {
+      if (isDnn) {
+        matrixReason = `DNN/Marketplace Prospect: fit score ${fit} (9-10 range) + Low intent → Tier 2 (DNN minimum)`;
+        return { tier: 2, reason: matrixReason };
+      }
       matrixReason = `Fit score ${fit} (9-10 range) + Low intent → Ignore`;
       return { tier: null, reason: matrixReason };
     }
@@ -91,17 +100,19 @@ function calcTierFromMatrix(account) {
       tier = 3;
       matrixReason = `Fit score ${fit} (5-8 range) + High intent → Tier 3`;
     } else {
+      if (isDnn) {
+        matrixReason = `DNN/Marketplace Prospect: fit score ${fit} (5-8 range) + ${intentLevel} intent → Tier 2 (DNN minimum)`;
+        return { tier: 2, reason: matrixReason };
+      }
       matrixReason = `Fit score ${fit} (5-8 range) + ${intentLevel} intent → Ignore`;
       return { tier: null, reason: matrixReason };
     }
   }
 
-  // DNN / Marketplace override: minimum Tier 2 for High Intent
-  if (isDnn && intentLevel === 'High' && tier !== null && tier > 2) {
-    matrixReason += `. Upgraded to Tier 2 (minimum) because account is a DNN/Marketplace Prospect with High intent`;
+  // DNN / Marketplace override: minimum Tier 2 for High intent
+  if (isDnn && tier !== null && tier > 2) {
+    matrixReason += `. Upgraded to Tier 2 (minimum) because account is a DNN/Marketplace Prospect`;
     tier = 2;
-  } else if (isDnn && intentLevel === 'High' && tier !== null) {
-    matrixReason += `. DNN/Marketplace Prospect with High intent confirms at least Tier 2`;
   }
 
   return { tier, reason: matrixReason };
