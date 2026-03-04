@@ -23,14 +23,24 @@ function shouldExclude(account) {
   if (String(account.Company_isDefunct__c).toLowerCase() === 'true') {
     reasons.push('Company is marked as defunct');
   }
-  if (account.Qualified_Out_Detail__c && String(account.Qualified_Out_Detail__c).trim() !== '') {
-    reasons.push(`Qualified out: ${account.Qualified_Out_Detail__c}`);
+  if (
+    (account.Qualified_Out_Detail__c && String(account.Qualified_Out_Detail__c).trim() !== '') ||
+    (account.Qualified_Out_Date__c && String(account.Qualified_Out_Date__c).trim() !== '') ||
+    (account.Qualified_Out_Reason__c && String(account.Qualified_Out_Reason__c).trim() !== '')
+  ) {
+    const detail = account.Qualified_Out_Detail__c ? `detail: ${account.Qualified_Out_Detail__c}` : null;
+    const date = account.Qualified_Out_Date__c ? `date: ${account.Qualified_Out_Date__c}` : null;
+    const reason = account.Qualified_Out_Reason__c ? `reason: ${account.Qualified_Out_Reason__c}` : null;
+    reasons.push(`Qualified out (${[detail, date, reason].filter(Boolean).join(', ')})`);
   }
   if (account.Consulting_IT_Filter_Flow__c === true || account.Consulting_IT_Filter_Flow__c === 'true') {
     reasons.push('Consulting/IT filter flow is active');
   }
   if (account.Account_Stage__c && EXCLUDE_STAGES.has(account.Account_Stage__c)) {
     reasons.push(`Account stage "${account.Account_Stage__c}" is excluded from tiering`);
+  }
+  if (account.Sales_Segment__c === 'Commercial') {
+    reasons.push('Sales segment is Commercial (excluded from ABX targeting)');
   }
 
   return reasons;

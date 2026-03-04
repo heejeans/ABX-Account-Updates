@@ -7,6 +7,12 @@ export default function Header({
   summary,
   activeFilter,
   onFilterChange,
+  reasonGroups,
+  activeReasonFilter,
+  onReasonFilterChange,
+  onApproveGroup,
+  onRejectGroup,
+  filteredAccounts,
   search,
   onSearchChange,
   onApproveAll,
@@ -19,16 +25,16 @@ export default function Header({
     {
       label: 'Current ABX',
       value: summary.currentABX,
-      filter: null,
+      filter: 'Current ABX',
       color: '#2563eb',
     },
     {
       label: 'Final ABX',
-      value: summary.finalABX !== null ? summary.finalABX : '—',
-      sub: summary.finalABX !== null
+      value: summary.estimatedFinalABX !== null ? summary.estimatedFinalABX : '—',
+      sub: summary.estimatedFinalABX !== null
         ? `${summary.netChange >= 0 ? '+' : ''}${summary.netChange} net`
-        : 'approve changes to calculate',
-      filter: null,
+        : null,
+      filter: 'Final ABX',
       color: '#0d9488',
     },
     {
@@ -128,6 +134,46 @@ export default function Header({
             )}
           </div>
         </div>
+
+        {/* Reason group sub-filters — only shown for Add / Remove / Reclassify */}
+        {reasonGroups && reasonGroups.length > 0 && (
+          <div className="header__reason-row">
+            <div className="reason-pills">
+              {reasonGroups.map(({ label, count }) => {
+                const isActive = activeReasonFilter === label;
+                return (
+                  <button
+                    key={label}
+                    className={`reason-pill${isActive ? ' reason-pill--active' : ''}`}
+                    onClick={() => onReasonFilterChange(isActive ? null : label)}
+                  >
+                    {label}
+                    <span className="reason-pill__count">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {activeReasonFilter && (
+              <div className="reason-bulk-actions">
+                <span className="reason-bulk-label">
+                  {filteredAccounts.length} accounts:
+                </span>
+                <button
+                  className="btn btn-sm btn-approve-group"
+                  onClick={() => onApproveGroup(filteredAccounts)}
+                >
+                  ✓ Approve all
+                </button>
+                <button
+                  className="btn btn-sm btn-reject-group"
+                  onClick={() => onRejectGroup(filteredAccounts)}
+                >
+                  ✕ Reject all
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

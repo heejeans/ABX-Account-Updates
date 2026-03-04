@@ -24,6 +24,18 @@ let isFetching = false;
 let fetchProgress = [];
 let fetchError = null;
 
+// Auto-load pre-fetched data on startup if available
+const dataPath = path.join(__dirname, '..', 'data', 'accounts.json');
+try {
+  const fs = require('fs');
+  if (fs.existsSync(dataPath)) {
+    accountsCache = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    console.log(`Loaded ${accountsCache.length} pre-fetched accounts from data/accounts.json`);
+  }
+} catch (e) {
+  console.warn('Could not load pre-fetched data:', e.message);
+}
+
 // SSE clients for progress streaming
 let sseClients = [];
 
@@ -95,6 +107,13 @@ app.post('/api/fetch', async (req, res) => {
     const rawAccounts = await fetchAllAccounts(sendProgress);
     accountsCache = processAccounts(rawAccounts);
     sendProgress(`Processing complete. ${accountsCache.length} accounts evaluated.`);
+    // Persist to disk so server restarts use fresh data
+    const fs = require('fs');
+    const dataDir = path.join(__dirname, '..', 'data');
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'raw_accounts.json'), JSON.stringify(rawAccounts));
+    fs.writeFileSync(path.join(dataDir, 'accounts.json'), JSON.stringify(accountsCache));
+    sendProgress('Data saved to disk.');
   } catch (err) {
     fetchError = err;
     sendProgress(`ERROR: ${err.message}`);
