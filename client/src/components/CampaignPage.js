@@ -1,153 +1,18 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import FieldFilters from './FieldFilters';
 import './CampaignPage.css';
 
-const CAMPAIGN_ID   = '701VN00000VpEWvYAN';
-const CAMPAIGN_NAME = '2025_09_ABX_Accounts';
-const SF_BASE_URL   = 'https://cloudzero.lightning.force.com';
-const SF_ACCT_BASE  = 'https://cloudzero.lightning.force.com/lightning/r/Account';
-
-// ─── Apex code strings ────────────────────────────────────────────────────────
-const APEX_TRIGGER = `/**
- * ABXCampaignSync — Apex Trigger
- * Fires after Account updates to automatically manage Campaign membership
- * when ABX_Tier__c is assigned, changed, or cleared.
- *
- * Campaign: ${CAMPAIGN_NAME} (${CAMPAIGN_ID})
- */
-trigger ABXCampaignSync on Account (after update) {
-    ABXCampaignSyncController.handleTierChanges(
-        Trigger.new,
-        Trigger.oldMap
-    );
-}`;
-
-const APEX_CLASS = `/**
- * ABXCampaignSyncController
- *
- * Handles two integration paths:
- *   1. Apex Trigger  — auto-syncs on ABX_Tier__c field change
- *   2. REST Endpoint — called by the ABX Review App when user clicks
- *                      "Sync to SFDC" to bulk-apply approved changes
- *
- * REST endpoint:
- *   POST /services/apexrest/abx/campaign-sync
- *   Body: { "changes": [ { "accountId": "...", "action": "Add|Remove", "tier": "Tier 1|2|3|null" } ] }
- */
-public class ABXCampaignSyncController {
-
-    public static final Id ABX_CAMPAIGN_ID = '${CAMPAIGN_ID}';
-
-    // ── Trigger entry point ──────────────────────────────────────────────────
-
-    public static void handleTierChanges(
-        List<Account>    newAccounts,
-        Map<Id, Account> oldMap
-    ) {
-        List<CampaignMember> toAdd    = new List<CampaignMember>();
-        Set<Id>              toRemove = new Set<Id>();
-
-        for (Account acc : newAccounts) {
-            Account old = oldMap.get(acc.Id);
-            Boolean hadTier = old.ABX_Tier__c != null;
-            Boolean hasTier = acc.ABX_Tier__c != null;
-
-            if (!hadTier && hasTier) {
-                // Tier assigned — add to ABX campaign
-                toAdd.add(new CampaignMember(
-                    CampaignId      = ABX_CAMPAIGN_ID,
-                    LeadOrContactId = acc.Id,
-                    Status          = 'Outreach in Progress'
-                ));
-            } else if (hadTier && !hasTier) {
-                // Tier cleared — remove from ABX campaign
-                toRemove.add(acc.Id);
-            }
-            // Tier reclassified: no campaign change needed (tier field already updated)
-        }
-
-        if (!toAdd.isEmpty())    insert toAdd;
-        if (!toRemove.isEmpty()) removeMembersForAccounts(toRemove);
-    }
-
-    // ── REST endpoint (called by ABX Review App) ─────────────────────────────
-
-    @RestResource(urlMapping='/abx/campaign-sync/*')
-    global class ABXSyncEndpoint {
-        @HttpPost
-        global static SyncResult doPost() {
-            SyncPayload body = (SyncPayload) JSON.deserialize(
-                RestContext.request.requestBody.toString(),
-                SyncPayload.class
-            );
-            return applyChanges(body.changes);
-        }
-    }
-
-    // ── Core sync logic ──────────────────────────────────────────────────────
-
-    public static SyncResult applyChanges(List<SyncChange> changes) {
-        List<CampaignMember> toAdd    = new List<CampaignMember>();
-        Set<Id>              toRemove = new Set<Id>();
-
-        for (SyncChange c : changes) {
-            Id accountId = (Id) c.accountId;
-
-            if (c.action == 'Add') {
-                toAdd.add(new CampaignMember(
-                    CampaignId      = ABX_CAMPAIGN_ID,
-                    LeadOrContactId = accountId,
-                    Status          = 'Outreach in Progress'
-                ));
-            } else if (c.action == 'Remove') {
-                toRemove.add(accountId);
-            }
-        }
-
-        if (!toAdd.isEmpty())    insert toAdd;
-        if (!toRemove.isEmpty()) removeMembersForAccounts(toRemove);
-
-        return new SyncResult(toAdd.size(), toRemove.size(), 0);
-    }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private static void removeMembersForAccounts(Set<Id> accountIds) {
-        List<CampaignMember> members = [
-            SELECT Id FROM CampaignMember
-            WHERE CampaignId       = :ABX_CAMPAIGN_ID
-            AND   LeadOrContactId IN :accountIds
-        ];
-        if (!members.isEmpty()) delete members;
-    }
-
-    // ── DTOs ─────────────────────────────────────────────────────────────────
-
-    public class SyncPayload {
-        public List<SyncChange> changes;
-    }
-
-    public class SyncChange {
-        public String accountId;
-        public String action;   // 'Add' | 'Remove'
-        public String tier;     // 'Tier 1' | 'Tier 2' | 'Tier 3' | null
-    }
-
-    public class SyncResult {
-        public Integer added;
-        public Integer removed;
-        public Integer updated;
-        public SyncResult(Integer a, Integer r, Integer u) {
-            this.added = a; this.removed = r; this.updated = u;
-        }
-    }
-}`;
+const SF_ACCT_BASE = 'https://cloudzero.lightning.force.com/lightning/r/Account';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Field-based: account should be in campaign iff ABX_Tier__c is currently set
-function isInFinalABX(account) {
-  return !!account.currentTier;
+// Mirrors App.js — returns the tier an account will have after review decisions
+function effectiveTier(account, approved, rejected) {
+  if (approved.has(account.Id)) {
+    if (account.action === 'Remove') return null;
+    return account.recommendedTier || null;
+  }
+  return account.currentTier || null;
 }
 
 function TierBadge({ tier }) {
@@ -165,19 +30,31 @@ function FitScore({ value }) {
 
 // ─── Campaign Card ─────────────────────────────────────────────────────────────
 
-function CampaignCard({ row }) {
+function CampaignCard({ row, isApproved, isRejected, isSelected, onApprove, onReject, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
+  const isActionable = row.syncStatus !== 'synced';
 
-  const cardClass = row.syncStatus === 'needs-add'
-    ? 'account-card account-card--cp-add'
-    : row.syncStatus === 'needs-remove'
-      ? 'account-card account-card--cp-remove'
-      : 'account-card account-card--cp-synced';
+  const cardClass = [
+    row.syncStatus === 'needs-add'    ? 'account-card account-card--cp-add'    :
+    row.syncStatus === 'needs-remove' ? 'account-card account-card--cp-remove' :
+                                        'account-card account-card--cp-synced',
+    isRejected ? 'account-card--rejected' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <div className={cardClass}>
       <div className="account-card__main">
-        {/* Left: name + sync badge + meta */}
+        {isActionable && !isApproved && onToggleSelect && (
+          <div className="account-card__checkbox">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect(row.Id)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
+
         <div className="account-card__info">
           <div className="account-card__name-row">
             <a
@@ -188,14 +65,23 @@ function CampaignCard({ row }) {
             >
               {row.Name || '(unnamed)'}
             </a>
-            {row.syncStatus === 'synced' && (
-              <span className="cp-status cp-status--synced">✓ Synced</span>
+            {isApproved ? (
+              <span className="badge badge-nochange">No Change</span>
+            ) : (
+              <>
+                {row.syncStatus === 'synced' && (
+                  <span className="badge badge-nochange">No Change</span>
+                )}
+                {row.syncStatus === 'needs-add' && (
+                  <span className="badge badge-add">Add</span>
+                )}
+                {row.syncStatus === 'needs-remove' && (
+                  <span className="badge badge-remove">Remove</span>
+                )}
+              </>
             )}
-            {row.syncStatus === 'needs-add' && (
-              <span className="cp-status cp-status--add">➕ Will Add to Campaign</span>
-            )}
-            {row.syncStatus === 'needs-remove' && (
-              <span className="cp-status cp-status--remove">🗑 Will Remove from Campaign</span>
+            {isRejected && (
+              <span className="badge badge-rejected-inline">✕ Rejected</span>
             )}
           </div>
           <div className="account-card__meta">
@@ -221,22 +107,27 @@ function CampaignCard({ row }) {
           </div>
         </div>
 
-        {/* Center: tier */}
         <div className="account-card__tier">
-          <TierBadge tier={row.currentTier} />
-          {row.recommendedTier && row.recommendedTier !== row.currentTier && (
-            <>
-              <span className="tier-arrow">→</span>
-              <TierBadge tier={row.recommendedTier} />
-            </>
-          )}
+          <TierBadge tier={row.effectiveTier} />
         </div>
 
-        {/* Right: in-campaign indicator + expand */}
         <div className="account-card__actions">
-          <span className={`cp-in-badge${row.inCampaign ? ' cp-in-badge--yes' : ' cp-in-badge--no'}`}>
-            {row.inCampaign ? '✓ In Campaign' : '— Not in Campaign'}
-          </span>
+          {isActionable && !isApproved && (
+            <div className="account-card__vote">
+              <button
+                className="btn-approve"
+                onClick={() => onApprove(row.Id)}
+              >
+                ✓ Approve
+              </button>
+              <button
+                className={`btn-reject${isRejected ? ' active' : ''}`}
+                onClick={() => onReject(row.Id)}
+              >
+                ✕ Reject
+              </button>
+            </div>
+          )}
           <button
             className="expand-btn"
             onClick={() => setExpanded((e) => !e)}
@@ -250,8 +141,22 @@ function CampaignCard({ row }) {
       {expanded && (
         <div className="account-card__expanded">
           <div className="expanded__reason">
-            <strong>Review recommendation:</strong> {row.reason || '—'}
+            <strong>Campaign action:</strong>{' '}
+            {row.syncStatus === 'needs-add' && (
+              <>Add to campaign — this account has <strong>{row.effectiveTier}</strong> but is not yet a campaign member.</>
+            )}
+            {row.syncStatus === 'needs-remove' && (
+              <>Remove from campaign — this account is a campaign member but has no current tier.</>
+            )}
+            {row.syncStatus === 'synced' && (
+              <>No change needed — this account is already in the campaign with an active tier.</>
+            )}
           </div>
+          {row.reason && (
+            <div className="expanded__reason expanded__reason--secondary">
+              <strong>ABX review note:</strong> {row.reason}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -260,15 +165,18 @@ function CampaignCard({ row }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CampaignPage({ accounts, campaignData, filter, onFilterChange }) {
-  const [showApex,      setShowApex]      = useState(false);
-  const [apexTab,       setApexTab]       = useState('trigger');
-  const [copiedApex,    setCopiedApex]    = useState(false);
-  const [syncResult,    setSyncResult]    = useState(null);
-  const [isSyncing,     setIsSyncing]     = useState(false);
-  const [syncError,     setSyncError]     = useState(null);
-  const [search,        setSearch]        = useState('');
-  const [fieldFilters,  setFieldFilters]  = useState({});
+export default function CampaignPage({
+  accounts, campaignData, filter,
+  approved = new Set(), rejected = new Set(),
+  cpApproved = new Set(), cpRejected = new Set(),
+  onCpApprove, onCpReject,
+}) {
+  const [search,       setSearch]       = useState('');
+  const [fieldFilters, setFieldFilters] = useState({});
+  const [cpSelected,   setCpSelected]   = useState(new Set());
+  const selectAllRef = useRef(null);
+
+  useEffect(() => { setCpSelected(new Set()); }, [filter]);
 
   const handleFieldFilterChange = useCallback((key, value) => {
     if (key === '__clear__') { setFieldFilters({}); return; }
@@ -282,35 +190,36 @@ export default function CampaignPage({ accounts, campaignData, filter, onFilterC
     });
   }, []);
 
-  // Build a Set of account IDs currently in the campaign
+  const handleToggleSelect = useCallback((id) => {
+    setCpSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+
   const memberSet = useMemo(() => {
     if (!campaignData?.members) return new Set();
     return new Set(campaignData.members.map((m) => m.accountId));
   }, [campaignData]);
 
-  // Compute per-account sync status — purely field-based (ABX_Tier__c = currentTier)
   const rows = useMemo(() => {
     return accounts
       .filter((a) => a.action !== 'Ignore')
       .map((a) => {
         const inCampaign = memberSet.has(a.Id);
-        const inFinalABX = isInFinalABX(a);
+        const tier       = effectiveTier(a, approved, rejected);
+        const inFinalABX = !!tier;
         let syncStatus;
         if      ( inCampaign &&  inFinalABX) syncStatus = 'synced';
         else if (!inCampaign &&  inFinalABX) syncStatus = 'needs-add';
         else if ( inCampaign && !inFinalABX) syncStatus = 'needs-remove';
-        else return null; // no tier, not in campaign — skip
-        return { ...a, inCampaign, inFinalABX, syncStatus };
+        else return null;
+        return { ...a, inCampaign, inFinalABX, syncStatus, effectiveTier: tier };
       })
       .filter(Boolean);
-  }, [accounts, memberSet]);
+  }, [accounts, memberSet, approved, rejected]);
 
-  const pendingChanges = useMemo(
-    () => rows.filter((r) => r.syncStatus !== 'synced'),
-    [rows]
-  );
-
-  // Field options for the FieldFilters dropdown
   const fieldOptions = useMemo(() => {
     const INTENT_ORDER = ['High', 'Medium', 'Low', 'None'];
     const FIT_ORDER    = ['9+ (High)', '5–8 (Med)', '< 5 (Low)', 'No Score'];
@@ -322,10 +231,10 @@ export default function CampaignPage({ accounts, campaignData, filter, onFilterC
       if (a.Sales_Segment__c) segments.add(a.Sales_Segment__c);
       currentTiers.add(a.currentTier || 'No Tier');
       const fit = parseFloat(a.Fit_Score_Total__c);
-      if (isNaN(fit))       fitRanges.add('No Score');
-      else if (fit < 5)     fitRanges.add('< 5 (Low)');
-      else if (fit <= 8)    fitRanges.add('5–8 (Med)');
-      else                  fitRanges.add('9+ (High)');
+      if (isNaN(fit))    fitRanges.add('No Score');
+      else if (fit < 5)  fitRanges.add('< 5 (Low)');
+      else if (fit <= 8) fitRanges.add('5–8 (Med)');
+      else               fitRanges.add('9+ (High)');
       dnns.add(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN');
     });
     const tierSort = (a, b) => a === 'No Tier' ? 1 : b === 'No Tier' ? -1 : a.localeCompare(b);
@@ -340,19 +249,23 @@ export default function CampaignPage({ accounts, campaignData, filter, onFilterC
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    // Status filter (from header card clicks)
     let base;
-    if (!filter || filter === 'all')   base = rows;
-    else if (filter === 'in-campaign') base = rows.filter((r) => r.inCampaign);
-    else                               base = rows.filter((r) => r.syncStatus === filter);
+    if (!filter || filter === 'all')        base = rows.filter((r) => r.syncStatus !== 'synced');
+    else if (filter === 'in-campaign') {
+      // Exclude accounts whose removal was approved — they're effectively out of campaign
+      base = rows.filter((r) => r.inCampaign && !(cpApproved.has(r.Id) && r.syncStatus === 'needs-remove'));
+    }
+    else {
+      // Actionable tabs: exclude approved/rejected rows (queue behavior, mirrors Review tab)
+      base = rows.filter((r) => r.syncStatus === filter && !cpApproved.has(r.Id) && !cpRejected.has(r.Id));
+    }
 
-    // Field filters
     const { intent, stage, segment, fitRange, currentTier, isDnn } = fieldFilters;
     base = base.filter((a) => {
-      if (intent?.length      && !intent.includes(a.Account_Intent__c || 'None'))         return false;
-      if (stage?.length       && !stage.includes(a.Account_Stage__c || ''))               return false;
-      if (segment?.length     && !segment.includes(a.Sales_Segment__c || ''))             return false;
-      if (currentTier?.length && !currentTier.includes(a.currentTier || 'No Tier'))       return false;
+      if (intent?.length      && !intent.includes(a.Account_Intent__c || 'None'))   return false;
+      if (stage?.length       && !stage.includes(a.Account_Stage__c || ''))         return false;
+      if (segment?.length     && !segment.includes(a.Sales_Segment__c || ''))       return false;
+      if (currentTier?.length && !currentTier.includes(a.currentTier || 'No Tier')) return false;
       if (fitRange?.length) {
         const fit = parseFloat(a.Fit_Score_Total__c);
         const bucket = isNaN(fit) ? 'No Score' : fit < 5 ? '< 5 (Low)' : fit <= 8 ? '5–8 (Med)' : '9+ (High)';
@@ -362,156 +275,77 @@ export default function CampaignPage({ accounts, campaignData, filter, onFilterC
       return true;
     });
 
-    // Search
     if (search) {
       const q = search.toLowerCase();
       base = base.filter((r) => r.Name?.toLowerCase().includes(q));
     }
     return base;
-  }, [rows, filter, fieldFilters, search]);
+  }, [rows, filter, fieldFilters, search, cpApproved, cpRejected]);
 
-  // Sync payload — field-based: Add = missing from campaign but has tier, Remove = in campaign but no tier
-  const syncPayload = useMemo(() => ({
-    changes: pendingChanges.map((r) => ({
-      accountId: r.Id,
-      action: r.syncStatus === 'needs-add' ? 'Add' : 'Remove',
-      tier:   r.syncStatus === 'needs-add' ? r.currentTier : null,
-    })),
-  }), [pendingChanges]);
+  const isActionableTab = ['needs-add', 'needs-remove'].includes(filter);
 
-  async function handleSync() {
-    if (pendingChanges.length === 0) return;
-    setIsSyncing(true);
-    setSyncError(null);
-    setSyncResult(null);
-    try {
-      const res = await fetch('/api/apply', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(syncPayload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Sync failed');
-      setSyncResult({ ...data.result, timestamp: new Date().toLocaleString() });
-    } catch (err) {
-      setSyncError(err.message);
-    } finally {
-      setIsSyncing(false);
+  const actionableVisible = useMemo(
+    () => filteredRows.filter((r) => r.syncStatus !== 'synced'),
+    [filteredRows]
+  );
+
+  const allSelected  = actionableVisible.length > 0 && actionableVisible.every((r) => cpSelected.has(r.Id));
+  const someSelected = actionableVisible.some((r) => cpSelected.has(r.Id));
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected && !allSelected;
     }
-  }
+  }, [someSelected, allSelected]);
 
-  async function handleCopyApex() {
-    const code = apexTab === 'trigger' ? APEX_TRIGGER : APEX_CLASS;
-    await navigator.clipboard.writeText(code);
-    setCopiedApex(true);
-    setTimeout(() => setCopiedApex(false), 2000);
-  }
+  const handleSelectAll = useCallback(() => {
+    if (allSelected) setCpSelected(new Set());
+    else setCpSelected(new Set(actionableVisible.map((r) => r.Id)));
+  }, [allSelected, actionableVisible]);
+
+  const handleApproveSelected = useCallback(() => {
+    cpSelected.forEach((id) => onCpApprove?.(id));
+    setCpSelected(new Set());
+  }, [cpSelected, onCpApprove]);
+
+  const handleRejectSelected = useCallback(() => {
+    cpSelected.forEach((id) => onCpReject?.(id));
+    setCpSelected(new Set());
+  }, [cpSelected, onCpReject]);
+
 
   return (
     <div className="campaign-page">
 
-      {/* ── Page header ────────────────────────────────────────────────────── */}
-      <div className="cp-header">
-        <div className="cp-header__left">
-          <div className="cp-header__name">{CAMPAIGN_NAME}</div>
-          <div className="cp-header__meta">
-            <a
-              href={`${SF_BASE_URL}/${CAMPAIGN_ID}`}
-              target="_blank"
-              rel="noreferrer"
-              className="cp-header__sflink cp-header__id"
-            >
-              {CAMPAIGN_ID} ↗
-            </a>
-          </div>
-        </div>
-        <div className="cp-header__actions">
-          <button
-            className={`btn btn-outline cp-apex-toggle${showApex ? ' cp-apex-toggle--open' : ''}`}
-            onClick={() => setShowApex((v) => !v)}
-          >
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z"/></svg>
-            Apex Code
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleSync}
-            disabled={pendingChanges.length === 0 || isSyncing}
-          >
-            {isSyncing ? '⏳ Syncing…' : `⚡ Sync to SFDC (${pendingChanges.length})`}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Sync result banner ─────────────────────────────────────────────── */}
-      {syncResult && (
-        <div className="cp-banner cp-banner--success">
-          <span className="cp-banner__icon">✓</span>
-          <span>
-            <strong>{syncResult.mock ? 'Mock sync complete' : 'Synced to Salesforce'}</strong>
-            {' '}— {syncResult.added} added, {syncResult.removed} removed
-            {syncResult.mock && <span className="cp-banner__mock-tag">MOCK</span>}
-          </span>
-          <span className="cp-banner__time">{syncResult.timestamp}</span>
-          <button className="cp-banner__close" onClick={() => setSyncResult(null)}>×</button>
-        </div>
-      )}
-      {syncError && (
-        <div className="cp-banner cp-banner--error">
-          <span className="cp-banner__icon">✕</span>
-          <span><strong>Sync failed</strong> — {syncError}</span>
-          <button className="cp-banner__close" onClick={() => setSyncError(null)}>×</button>
-        </div>
-      )}
-
-      {/* ── Apex code panel ────────────────────────────────────────────────── */}
-      {showApex && (
-        <div className="cp-apex">
-          <div className="cp-apex__topbar">
-            <div className="cp-apex__filetabs">
-              <button
-                className={`cp-apex__filetab${apexTab === 'trigger' ? ' cp-apex__filetab--active' : ''}`}
-                onClick={() => setApexTab('trigger')}
-              >
-                ABXCampaignSync.trigger
-              </button>
-              <button
-                className={`cp-apex__filetab${apexTab === 'class' ? ' cp-apex__filetab--active' : ''}`}
-                onClick={() => setApexTab('class')}
-              >
-                ABXCampaignSyncController.cls
-              </button>
-              <button
-                className={`cp-apex__filetab${apexTab === 'payload' ? ' cp-apex__filetab--active' : ''}`}
-                onClick={() => setApexTab('payload')}
-              >
-                REST Payload Preview
-              </button>
-            </div>
-            <button className="btn btn-outline cp-apex__copy" onClick={handleCopyApex}>
-              {copiedApex ? '✓ Copied' : '⎘ Copy'}
-            </button>
-          </div>
-          <pre className="cp-apex__code">
-            {apexTab === 'trigger'  && APEX_TRIGGER}
-            {apexTab === 'class'    && APEX_CLASS}
-            {apexTab === 'payload'  && JSON.stringify(syncPayload, null, 2)}
-          </pre>
-          <div className="cp-apex__footer">
-            <span className="cp-apex__badge">⚠ Mock only</span>
-            Deploy <code>ABXCampaignSync.trigger</code> and{' '}
-            <code>ABXCampaignSyncController.cls</code> to your Salesforce org.
-            The app will call <code>POST /services/apexrest/abx/campaign-sync</code>
-            {' '}with the payload above when you click <strong>Sync to SFDC</strong>.
-          </div>
-        </div>
-      )}
-
-      {/* ── List toolbar (matches Review page style) ───────────────────────── */}
+      {/* ── List toolbar ───────────────────────────────────────────────────── */}
       <div className="list-toolbar">
-        <div className="record-count">
-          Showing {filteredRows.length} accounts
-          {search && ` matching "${search}"`}
+        <div className="list-toolbar__left">
+          {isActionableTab && actionableVisible.length > 0 && (
+            <label className="select-all-label">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                className="select-all-cb"
+                checked={allSelected}
+                onChange={handleSelectAll}
+              />
+            </label>
+          )}
+          <div className="record-count">
+            Showing {filteredRows.length} accounts
+            {search && ` matching "${search}"`}
+          </div>
+          {isActionableTab && actionableVisible.length > 0 && (
+            <div className={`bulk-actions${someSelected ? ' bulk-actions--active' : ''}`}>
+              <span className={`selected-count${allSelected ? ' selected-count--all' : ''}`}>
+                {allSelected
+                  ? `All ${actionableVisible.length} selected`
+                  : `${actionableVisible.filter(r => cpSelected.has(r.Id)).length} selected`}
+              </span>
+              <button className="btn-approve" onClick={handleApproveSelected}>✓ Approve</button>
+              <button className="btn-reject" onClick={handleRejectSelected}>✕ Reject</button>
+            </div>
+          )}
         </div>
         <div className="list-toolbar__right">
           <div className="toolbar-search">
@@ -537,7 +371,16 @@ export default function CampaignPage({ accounts, campaignData, filter, onFilterC
       {/* ── Campaign cards ─────────────────────────────────────────────────── */}
       <div className="account-list">
         {filteredRows.map((row) => (
-          <CampaignCard key={row.Id} row={row} />
+          <CampaignCard
+            key={row.Id}
+            row={row}
+            isApproved={cpApproved.has(row.Id)}
+            isRejected={cpRejected.has(row.Id)}
+            isSelected={cpSelected.has(row.Id)}
+            onApprove={onCpApprove}
+            onReject={onCpReject}
+            onToggleSelect={isActionableTab ? handleToggleSelect : undefined}
+          />
         ))}
         {filteredRows.length === 0 && (
           <div className="account-list__empty">No accounts match the current filters.</div>

@@ -6,6 +6,15 @@ import FetchPanel from './components/FetchPanel';
 import CampaignPage from './components/CampaignPage';
 import './App.css';
 
+// Compute the effective tier after a review decision is applied
+function effectiveTier(account, approved, rejected) {
+  if (approved.has(account.Id)) {
+    if (account.action === 'Remove') return null;           // approved removal → loses tier
+    return account.recommendedTier || null;                  // approved add/reclassify → gains tier
+  }
+  return account.currentTier || null;                        // rejected / pending → unchanged
+}
+
 // Derive a short rule-group label from an account's reason string
 function getRuleGroup(account) {
   const r = account.reason || '';
@@ -34,6 +43,8 @@ export default function App() {
   const [accounts, setAccounts] = useState([]);
   const [approved, setApproved] = useState(new Set());
   const [rejected, setRejected] = useState(new Set());
+  const [selected, setSelected] = useState(new Set());
+  const selectAllRef = useRef(null);
   const [activeFilter, setActiveFilter] = useState('Current ABX');
   const [activeReasonFilter, setActiveReasonFilter] = useState(null);
   const [fieldFilters, setFieldFilters] = useState({});
@@ -43,6 +54,8 @@ export default function App() {
   const [view, setView] = useState('review'); // 'review' | 'campaign'
   const [campaignData, setCampaignData] = useState(null);
   const [campaignFilter, setCampaignFilter] = useState('in-campaign');
+  const [cpApproved, setCpApproved] = useState(new Set());
+  const [cpRejected, setCpRejected] = useState(new Set());
   const eventSourceRef = useRef(null);
   const accountsLengthRef = useRef(0);
 
@@ -55,6 +68,8 @@ export default function App() {
       setAccounts(data);
       setApproved(new Set());
       setRejected(new Set());
+      setCpApproved(new Set());
+      setCpRejected(new Set());
     } catch (_) {}
   }, []);
 
@@ -143,20 +158,36 @@ export default function App() {
     setRejected(new Set());
   }, []);
 
-  // Summary stats
-  const currentABX   = accounts.filter((a) => a.currentTier).length;
+  const handleCpApprove = useCallback((id) => {
+    setCpApproved((prev) => new Set([...prev, id]));
+    setCpRejected((prev) => { const n = new Set(prev); n.delete(id); return n; });
+  }, []);
+
+  const handleCpReject = useCallback((id) => {
+    setCpRejected((prev) => new Set([...prev, id]));
+    setCpApproved((prev) => { const n = new Set(prev); n.delete(id); return n; });
+  }, []);
+
+  // Summary stats — currentABX reflects approved decisions so it updates live
+  const currentABX   = useMemo(
+    () => accounts.filter((a) => !!effectiveTier(a, approved, rejected)).length,
+    [accounts, approved, rejected]
+  );
   const adds         = accounts.filter((a) => a.action === 'Add').length;
   const removes      = accounts.filter((a) => a.action === 'Remove').length;
   const reclassifies = accounts.filter((a) => a.action === 'Reclassify').length;
-  const rejectedAdds    = accounts.filter((a) => a.action === 'Add'    && rejected.has(a.Id)).length;
-  const rejectedRemoves = accounts.filter((a) => a.action === 'Remove' && rejected.has(a.Id)).length;
+  const pendingAdds    = accounts.filter((a) => a.action === 'Add'    && !approved.has(a.Id) && !rejected.has(a.Id)).length;
+  const pendingRemoves = accounts.filter((a) => a.action === 'Remove' && !approved.has(a.Id) && !rejected.has(a.Id)).length;
   const estimatedFinalABX = accounts.length > 0
-    ? currentABX + (adds - rejectedAdds) - (removes - rejectedRemoves) : null;
+    ? currentABX + pendingAdds - pendingRemoves : null;
+
+  const pendingReclassifies = accounts.filter((a) => a.action === 'Reclassify' && !approved.has(a.Id) && !rejected.has(a.Id)).length;
 
   const summary = {
     currentABX, estimatedFinalABX,
     netChange: estimatedFinalABX !== null ? estimatedFinalABX - currentABX : 0,
-    adds, removes, reclassifies,
+    adds: pendingAdds, removes: pendingRemoves, reclassifies: pendingReclassifies,
+    totalAdds: adds, totalRemoves: removes, totalReclassifies: reclassifies,
     approvedCount: approved.size,
   };
 
@@ -164,12 +195,37 @@ export default function App() {
     const WITH_REASONS = ['Add', 'Remove', 'Reclassify'];
     if (!WITH_REASONS.includes(activeFilter)) return [];
     const counts = {};
-    accounts.filter((a) => a.action === activeFilter).forEach((a) => {
-      const g = getRuleGroup(a);
-      counts[g] = (counts[g] || 0) + 1;
-    });
+    accounts
+      .filter((a) => a.action === activeFilter && !approved.has(a.Id) && !rejected.has(a.Id))
+      .forEach((a) => {
+        const g = getRuleGroup(a);
+        counts[g] = (counts[g] || 0) + 1;
+      });
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
-  }, [accounts, activeFilter]);
+  }, [accounts, activeFilter, approved, rejected]);
+
+  // Clear selection when active filter changes
+  useEffect(() => { setSelected(new Set()); }, [activeFilter]);
+
+  const handleToggleSelect = useCallback((id) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+
+  const handleApproveSelected = useCallback(() => {
+    setApproved((prev) => new Set([...prev, ...selected]));
+    setRejected((prev) => { const n = new Set(prev); selected.forEach((id) => n.delete(id)); return n; });
+    setSelected(new Set());
+  }, [selected]);
+
+  const handleRejectSelected = useCallback(() => {
+    setRejected((prev) => new Set([...prev, ...selected]));
+    setApproved((prev) => { const n = new Set(prev); selected.forEach((id) => n.delete(id)); return n; });
+    setSelected(new Set());
+  }, [selected]);
 
   const handleFilterChange = useCallback((filter) => {
     setActiveFilter(filter);
@@ -189,7 +245,7 @@ export default function App() {
 
   const baseAccounts = useMemo(() => accounts.filter((a) => {
     if (search && !a.Name?.toLowerCase().includes(search.toLowerCase())) return false;
-    if (activeFilter === 'Current ABX') return !!a.currentTier;
+    if (activeFilter === 'Current ABX') return !!effectiveTier(a, approved, rejected);
     if (activeFilter === 'Final ABX') {
       return (
         a.action === 'No Change' || a.action === 'Reclassify' ||
@@ -197,10 +253,17 @@ export default function App() {
         (a.action === 'Add' && !rejected.has(a.Id))
       );
     }
+    // For actionable filters, only show pending (not yet approved or rejected)
+    if (['Add', 'Remove', 'Reclassify'].includes(activeFilter)) {
+      if (a.action !== activeFilter) return false;
+      if (approved.has(a.Id) || rejected.has(a.Id)) return false;
+      if (activeReasonFilter && getRuleGroup(a) !== activeReasonFilter) return false;
+      return true;
+    }
     if (activeFilter !== 'All' && a.action !== activeFilter) return false;
     if (activeReasonFilter && getRuleGroup(a) !== activeReasonFilter) return false;
     return true;
-  }), [accounts, search, activeFilter, activeReasonFilter, rejected]);
+  }), [accounts, search, activeFilter, activeReasonFilter, approved, rejected]);
 
   const fieldOptions = useMemo(() => {
     const INTENT_ORDER = ['High', 'Medium', 'Low', 'None'];
@@ -251,30 +314,59 @@ export default function App() {
     return true;
   }), [baseAccounts, fieldFilters]);
 
-  // Campaign sync stats — based purely on ABX_Tier__c field value:
-  // accounts WITH a tier should be in the campaign; accounts WITHOUT should not.
-  // This is independent of the review's approve/reject state — the intended flow is:
-  //   1. Apply tier changes to SFDC (Sync to SFDC button)
-  //   2. Then reconcile campaign membership to match who has a tier.
+  // Campaign sync stats — reflects both Review and Campaign-level approvals.
   const campaignStats = useMemo(() => {
     if (!campaignData?.members || accounts.length === 0) {
       return { currentlyInCampaign: 0, toAdd: 0, toRemove: 0, synced: 0 };
     }
     const memberSet = new Set(campaignData.members.map((m) => m.accountId));
     let toAdd = 0, toRemove = 0, synced = 0;
-    // Mirror CampaignPage: exclude Ignored accounts so header counts match the list
     accounts.filter((a) => a.action !== 'Ignore').forEach((a) => {
       const inCampaign = memberSet.has(a.Id);
-      const hasTier    = !!a.currentTier; // ABX_Tier__c is set in SFDC
-      if      ( inCampaign &&  hasTier) synced++;
-      else if (!inCampaign &&  hasTier) toAdd++;
-      else if ( inCampaign && !hasTier) toRemove++;
+      const hasTier    = !!effectiveTier(a, approved, rejected);
+      let status;
+      if      ( inCampaign &&  hasTier) status = 'synced';
+      else if (!inCampaign &&  hasTier) status = 'needs-add';
+      else if ( inCampaign && !hasTier) status = 'needs-remove';
+      else return; // no tier, not in campaign — skip
+
+      // Apply campaign-level approve decisions
+      if (cpApproved.has(a.Id)) {
+        if (status === 'needs-add')    status = 'synced';   // approved add → now in campaign
+        else if (status === 'needs-remove') return;         // approved remove → no longer in campaign
+      }
+
+      if      (status === 'synced')       synced++;
+      else if (status === 'needs-add')    toAdd++;
+      else if (status === 'needs-remove') toRemove++;
     });
-    // currentlyInCampaign derived from same logic so it matches the filtered list count
     return { currentlyInCampaign: synced + toRemove, toAdd, toRemove, synced };
-  }, [accounts, campaignData]);
+  }, [accounts, campaignData, approved, rejected, cpApproved]);
 
   const pendingSyncCount = campaignStats.toAdd + campaignStats.toRemove;
+
+  // Only show checkboxes/bulk actions on tabs that have actionable cards
+  const isActionableTab = ['Add', 'Remove', 'Reclassify'].includes(activeFilter);
+
+  // Review tab selection helpers
+  const actionableFiltered = useMemo(
+    () => filteredAccounts.filter((a) => a.action !== 'No Change' && a.action !== 'Ignore'),
+    [filteredAccounts]
+  );
+  const allSelected  = actionableFiltered.length > 0 && actionableFiltered.every((a) => selected.has(a.Id));
+  const someSelected = actionableFiltered.some((a) => selected.has(a.Id));
+
+  const handleSelectAll = useCallback(() => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(actionableFiltered.map((a) => a.Id)));
+  }, [allSelected, actionableFiltered]);
+
+  // Keep select-all checkbox indeterminate state in sync
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected && !allSelected;
+    }
+  }, [someSelected, allSelected]);
 
   return (
     <div className="app">
@@ -302,6 +394,7 @@ export default function App() {
             campaignStats={campaignStats}
             campaignFilter={campaignFilter}
             onCampaignFilterChange={setCampaignFilter}
+            campaignData={campaignData}
           />
           <main className="main-content">
             {view === 'campaign' ? (
@@ -310,14 +403,44 @@ export default function App() {
                 campaignData={campaignData}
                 filter={campaignFilter}
                 onFilterChange={setCampaignFilter}
+                approved={approved}
+                rejected={rejected}
+                cpApproved={cpApproved}
+                cpRejected={cpRejected}
+                onCpApprove={handleCpApprove}
+                onCpReject={handleCpReject}
               />
             ) : (
               <>
                 <div className="list-toolbar">
-                  <div className="record-count">
-                    Showing {filteredAccounts.length}
-                    {filteredAccounts.length !== baseAccounts.length && ` of ${baseAccounts.length}`} accounts
-                    {search && ` matching "${search}"`}
+                  <div className="list-toolbar__left">
+                    {isActionableTab && actionableFiltered.length > 0 && (
+                      <label className="select-all-label">
+                        <input
+                          ref={selectAllRef}
+                          type="checkbox"
+                          className="select-all-cb"
+                          checked={allSelected}
+                          onChange={handleSelectAll}
+                        />
+                      </label>
+                    )}
+                    <div className="record-count">
+                      Showing {filteredAccounts.length}
+                      {filteredAccounts.length !== baseAccounts.length && ` of ${baseAccounts.length}`} accounts
+                      {search && ` matching "${search}"`}
+                    </div>
+                    {isActionableTab && actionableFiltered.length > 0 && (
+                      <div className={`bulk-actions${someSelected ? ' bulk-actions--active' : ''}`}>
+                        <span className={`selected-count${allSelected ? ' selected-count--all' : ''}`}>
+                          {allSelected
+                            ? `All ${actionableFiltered.length} selected`
+                            : `${actionableFiltered.filter(a => selected.has(a.Id)).length} selected`}
+                        </span>
+                        <button className="btn-approve" onClick={handleApproveSelected}>✓ Approve</button>
+                        <button className="btn-reject" onClick={handleRejectSelected}>✕ Reject</button>
+                      </div>
+                    )}
                   </div>
                   <div className="list-toolbar__right">
                     <div className="toolbar-search">
@@ -343,8 +466,10 @@ export default function App() {
                   accounts={filteredAccounts}
                   approved={approved}
                   rejected={rejected}
+                  selected={selected}
                   onApprove={handleApprove}
                   onReject={handleReject}
+                  onToggleSelect={isActionableTab ? handleToggleSelect : undefined}
                 />
               </>
             )}

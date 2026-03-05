@@ -42,15 +42,39 @@ const FIELD_LABELS = {
   Entered_Closed_Lost_Date__c: 'Entered Closed Lost Date',
 };
 
-export default function AccountCard({ account, isApproved, isRejected, onApprove, onReject }) {
+export default function AccountCard({ account, isApproved, isRejected, isSelected, onApprove, onReject, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const isActionable = account.action !== 'No Change' && account.action !== 'Ignore';
 
+  // Compute the effective (post-approval) tier for display
+  const approvedTier = isApproved
+    ? (account.action === 'Remove' ? null : account.recommendedTier || null)
+    : account.currentTier;
+
   const tierChanged = account.currentTier !== account.recommendedTier;
 
+  // Approved accounts show "No Change" badge; others show their real action
+  const displayAction = isApproved ? 'No Change' : account.action;
+
+  // Only apply full green card highlight for Add accounts entering ABX.
+  const showApprovedCard = isApproved && account.action === 'Add';
+  const showRejectedCard = isRejected;
+
   return (
-    <div className={`account-card${isApproved ? ' account-card--approved' : ''}${isRejected ? ' account-card--rejected' : ''}`}>
+    <div className={`account-card${showApprovedCard ? ' account-card--approved' : ''}${showRejectedCard ? ' account-card--rejected' : ''}`}>
       <div className="account-card__main">
+        {/* Checkbox — only for pending actionable rows */}
+        {isActionable && !isApproved && onToggleSelect && (
+          <div className="account-card__checkbox">
+            <input
+              type="checkbox"
+              checked={isSelected || false}
+              onChange={() => onToggleSelect && onToggleSelect(account.Id)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
+
         {/* Left: name + badges */}
         <div className="account-card__info">
           <div className="account-card__name-row">
@@ -62,7 +86,10 @@ export default function AccountCard({ account, isApproved, isRejected, onApprove
             >
               {account.Name || '(unnamed)'}
             </a>
-            <ActionBadge action={account.action} />
+            <ActionBadge action={displayAction} />
+            {isRejected && (
+              <span className="badge badge-rejected-inline">✕ Rejected</span>
+            )}
           </div>
           <div className="account-card__meta">
             <span className="meta-item">
@@ -82,23 +109,29 @@ export default function AccountCard({ account, isApproved, isRejected, onApprove
           </div>
         </div>
 
-        {/* Center: tier change */}
+        {/* Center: tier — show effective tier when approved, current→recommended when pending */}
         <div className="account-card__tier">
-          <TierBadge tier={account.currentTier} />
-          {tierChanged && (
+          {isApproved ? (
+            <TierBadge tier={approvedTier} />
+          ) : (
             <>
-              <span className="tier-arrow">→</span>
-              <TierBadge tier={account.recommendedTier} />
+              <TierBadge tier={account.currentTier} />
+              {tierChanged && (
+                <>
+                  <span className="tier-arrow">→</span>
+                  <TierBadge tier={account.recommendedTier} />
+                </>
+              )}
             </>
           )}
         </div>
 
-        {/* Right: approve/reject + expand */}
+        {/* Right: approve/reject (only for pending actionable) + expand */}
         <div className="account-card__actions">
-          {isActionable && (
+          {isActionable && !isApproved && (
             <div className="account-card__vote">
               <button
-                className={`btn-approve${isApproved ? ' active' : ''}`}
+                className="btn-approve"
                 onClick={() => onApprove(account.Id)}
                 title="Approve this change"
               >

@@ -21,9 +21,13 @@ export default function Header({
   campaignStats,
   campaignFilter,
   onCampaignFilterChange,
+  campaignData,
 }) {
   const reviewCards = [
-    { label: 'Current ABX', value: summary.currentABX,  filter: 'Current ABX', color: '#2563eb' },
+    { label: 'Current ABX', value: summary.currentABX,  filter: 'Current ABX', color: '#059669' },
+    { label: 'Add',        value: summary.adds,        filter: 'Add',        color: '#2563eb' },
+    { label: 'Remove',     value: summary.removes,     filter: 'Remove',     color: '#dc2626' },
+    { label: 'Reclassify', value: summary.reclassifies, filter: 'Reclassify', color: '#7c3aed' },
     {
       label: 'Final ABX',
       value: summary.estimatedFinalABX !== null ? summary.estimatedFinalABX : '—',
@@ -33,23 +37,19 @@ export default function Header({
       filter: 'Final ABX',
       color: '#0d9488',
     },
-    { label: 'Add',        value: summary.adds,        filter: 'Add',        color: '#2563eb' },
-    { label: 'Remove',     value: summary.removes,     filter: 'Remove',     color: '#dc2626' },
-    { label: 'Reclassify', value: summary.reclassifies, filter: 'Reclassify', color: '#7c3aed' },
   ];
 
   const campaignCards = [
-    { label: 'Currently in Campaign', value: campaignStats?.currentlyInCampaign ?? '—', filter: 'in-campaign',  color: '#0d9488' },
-    { label: 'Will Add',              value: campaignStats?.toAdd      ?? '—',           filter: 'needs-add',    color: '#2563eb' },
-    { label: 'Will Remove',           value: campaignStats?.toRemove   ?? '—',           filter: 'needs-remove', color: '#dc2626' },
-    { label: 'Already Synced',        value: campaignStats?.synced     ?? '—',           filter: 'synced',       color: '#059669' },
+    { label: 'Currently in Campaign', value: campaignStats?.currentlyInCampaign ?? '—', filter: 'in-campaign',  color: '#059669' },
+    { label: 'Remove',                value: campaignStats?.toRemove   ?? '—',           filter: 'needs-remove', color: '#dc2626' },
+    { label: 'Add',                   value: campaignStats?.toAdd      ?? '—',           filter: 'needs-add',    color: '#2563eb' },
   ];
 
   const cards        = view === 'campaign' ? campaignCards : reviewCards;
   const activeCard   = view === 'campaign' ? campaignFilter : activeFilter;
   const onCardChange = view === 'campaign'
-    ? (f) => onCampaignFilterChange(campaignFilter === f ? 'all' : f)
-    : (f) => onFilterChange(activeFilter === f ? 'All' : f);
+    ? (f) => { if (campaignFilter !== f) onCampaignFilterChange(f); }
+    : (f) => { if (activeFilter !== f) onFilterChange(f); };
 
   return (
     <header className="header">
@@ -99,6 +99,25 @@ export default function Header({
             )}
           </div>
         </div>
+
+        {/* Campaign title — shown above cards when on Campaign Sync tab */}
+        {view === 'campaign' && campaignData && (
+          <div className="header__campaign-title">
+            <span className="header__campaign-name">
+              {campaignData.campaignName || '—'}
+            </span>
+            {campaignData.campaignId && (
+              <a
+                href={`https://cloudzero.lightning.force.com/${campaignData.campaignId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="header__campaign-id"
+              >
+                {campaignData.campaignId} ↗
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Summary cards — review stats or campaign stats depending on active tab */}
         <div className="header__cards">

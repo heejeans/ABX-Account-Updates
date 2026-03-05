@@ -94,6 +94,30 @@
   flex-wrap: wrap;
 }
 
+/* Campaign title (shown above cards on Campaign Sync tab) */
+.header__campaign-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0 0;
+}
+
+.header__campaign-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.header__campaign-id {
+  font-size: 12px;
+  font-family: monospace;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.header__campaign-id:hover { text-decoration: underline; }
+
 /* Summary cards */
 .header__cards {
   display: flex;
@@ -103,11 +127,12 @@
 }
 
 .summary-card {
+  flex: 1;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 10px 16px;
-  min-width: 110px;
+  min-width: 100px;
   text-align: center;
   cursor: default;
   transition: all 0.15s;
@@ -125,9 +150,21 @@
 }
 
 .summary-card--active {
-  background: #eff6ff;
+  background: var(--card-color, #2563eb);
   border-color: var(--card-color, #2563eb);
-  box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.summary-card--active .summary-card__value {
+  color: #fff;
+}
+
+.summary-card--active .summary-card__label {
+  color: rgba(255,255,255,0.8);
+}
+
+.summary-card--active .summary-card__sub {
+  color: rgba(255,255,255,0.65);
 }
 
 .summary-card__value {

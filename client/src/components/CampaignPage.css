@@ -5,18 +5,16 @@
 /* ── Campaign cards (reuse account-card base styles from App.css/AccountCard.css) */
 .account-card--cp-add {
   border-left: 3px solid #2563eb;
-  background: #f8faff;
 }
 
 .account-card--cp-remove {
   border-left: 3px solid #dc2626;
-  background: #fff7f7;
-  opacity: 0.9;
 }
 
 .account-card--cp-synced {
   border-left: 3px solid #d1d5db;
 }
+
 
 /* In-campaign badge */
 .cp-in-badge {
@@ -38,6 +36,30 @@
   background: #f3f4f6;
   color: #9ca3af;
 }
+
+/* ── Page title ──────────────────────────────────────────────────────────── */
+.cp-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.cp-title__name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.cp-title__link {
+  font-size: 12px;
+  font-family: monospace;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.cp-title__link:hover { text-decoration: underline; }
 
 /* ── Page header ─────────────────────────────────────────────────────────── */
 .cp-header {
