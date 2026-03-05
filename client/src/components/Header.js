@@ -1,8 +1,6 @@
 import React from 'react';
 import './Header.css';
 
-const FILTERS = ['All', 'Add', 'Remove', 'Reclassify', 'No Change'];
-
 export default function Header({
   summary,
   activeFilter,
@@ -13,21 +11,19 @@ export default function Header({
   onApproveGroup,
   onRejectGroup,
   filteredAccounts,
-  search,
-  onSearchChange,
   onApproveAll,
   onReset,
-  onDownload,
   onRefetch,
   approvedCount,
+  view,
+  onViewChange,
+  pendingSyncCount,
+  campaignStats,
+  campaignFilter,
+  onCampaignFilterChange,
 }) {
-  const cards = [
-    {
-      label: 'Current ABX',
-      value: summary.currentABX,
-      filter: 'Current ABX',
-      color: '#2563eb',
-    },
+  const reviewCards = [
+    { label: 'Current ABX', value: summary.currentABX,  filter: 'Current ABX', color: '#2563eb' },
     {
       label: 'Final ABX',
       value: summary.estimatedFinalABX !== null ? summary.estimatedFinalABX : '—',
@@ -37,38 +33,57 @@ export default function Header({
       filter: 'Final ABX',
       color: '#0d9488',
     },
-    {
-      label: 'Add',
-      value: summary.adds,
-      filter: 'Add',
-      color: '#2563eb',
-      badgeClass: 'badge-add',
-    },
-    {
-      label: 'Remove',
-      value: summary.removes,
-      filter: 'Remove',
-      color: '#dc2626',
-      badgeClass: 'badge-remove',
-    },
-    {
-      label: 'Reclassify',
-      value: summary.reclassifies,
-      filter: 'Reclassify',
-      color: '#7c3aed',
-      badgeClass: 'badge-reclassify',
-    },
+    { label: 'Add',        value: summary.adds,        filter: 'Add',        color: '#2563eb' },
+    { label: 'Remove',     value: summary.removes,     filter: 'Remove',     color: '#dc2626' },
+    { label: 'Reclassify', value: summary.reclassifies, filter: 'Reclassify', color: '#7c3aed' },
   ];
+
+  const campaignCards = [
+    { label: 'Currently in Campaign', value: campaignStats?.currentlyInCampaign ?? '—', filter: 'in-campaign',  color: '#0d9488' },
+    { label: 'Will Add',              value: campaignStats?.toAdd      ?? '—',           filter: 'needs-add',    color: '#2563eb' },
+    { label: 'Will Remove',           value: campaignStats?.toRemove   ?? '—',           filter: 'needs-remove', color: '#dc2626' },
+    { label: 'Already Synced',        value: campaignStats?.synced     ?? '—',           filter: 'synced',       color: '#059669' },
+  ];
+
+  const cards        = view === 'campaign' ? campaignCards : reviewCards;
+  const activeCard   = view === 'campaign' ? campaignFilter : activeFilter;
+  const onCardChange = view === 'campaign'
+    ? (f) => onCampaignFilterChange(campaignFilter === f ? 'all' : f)
+    : (f) => onFilterChange(activeFilter === f ? 'All' : f);
 
   return (
     <header className="header">
       <div className="header__inner">
         {/* Top row */}
         <div className="header__top">
-          <div className="header__title">
-            <span className="header__logo-cz">CloudZero</span>
-            <span className="header__logo-sep"> · </span>
-            <span className="header__logo-title">ABX Tier Review</span>
+          <div className="header__title-nav">
+            <div className="header__title">
+              <span className="header__logo-cz">CloudZero</span>
+              <span className="header__logo-sep"> · </span>
+              <span className="header__logo-title">ABX Tier Review</span>
+            </div>
+            <nav className="header__nav">
+              <button
+                className={`header__nav-tab${view === 'review' ? ' header__nav-tab--active' : ''}`}
+                onClick={() => onViewChange('review')}
+              >
+                Review
+                {(summary.adds + summary.removes + summary.reclassifies) > 0 && (
+                  <span className="header__nav-badge">
+                    {summary.adds + summary.removes + summary.reclassifies}
+                  </span>
+                )}
+              </button>
+              <button
+                className={`header__nav-tab${view === 'campaign' ? ' header__nav-tab--active' : ''}`}
+                onClick={() => onViewChange('campaign')}
+              >
+                Campaign Sync
+                {pendingSyncCount > 0 && (
+                  <span className="header__nav-badge">{pendingSyncCount}</span>
+                )}
+              </button>
+            </nav>
           </div>
           <div className="header__actions">
             <button className="btn btn-outline" onClick={onRefetch}>
@@ -77,27 +92,23 @@ export default function Header({
             <button className="btn btn-outline" onClick={onReset}>
               Reset
             </button>
-            <button className="btn btn-success" onClick={onApproveAll}>
-              Approve All
-            </button>
-            <button
-              className="btn btn-download"
-              onClick={onDownload}
-              disabled={approvedCount === 0}
-            >
-              ↓ Download Approved ({approvedCount})
-            </button>
+            {view === 'review' && (
+              <button className="btn btn-success" onClick={onApproveAll}>
+                Approve All
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Summary cards */}
+        {/* Summary cards — review stats or campaign stats depending on active tab */}
         <div className="header__cards">
           {cards.map((card) => (
             <button
               key={card.label}
-              className={`summary-card${card.filter && activeFilter === card.filter ? ' summary-card--active' : ''}${card.filter ? ' summary-card--clickable' : ''}`}
-              onClick={card.filter ? () => onFilterChange(activeFilter === card.filter ? 'All' : card.filter) : undefined}
+              className={`summary-card${card.filter && activeCard === card.filter ? ' summary-card--active' : ''}${card.filter ? ' summary-card--clickable' : ''}`}
+              onClick={card.filter ? () => onCardChange(card.filter) : undefined}
               style={{ '--card-color': card.color }}
+              disabled={false}
             >
               <div className="summary-card__value">{card.value}</div>
               <div className="summary-card__label">{card.label}</div>
@@ -106,37 +117,8 @@ export default function Header({
           ))}
         </div>
 
-        {/* Filters + search */}
-        <div className="header__filters">
-          <div className="filter-buttons">
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                className={`filter-btn${activeFilter === f ? ' filter-btn--active' : ''}`}
-                onClick={() => onFilterChange(f)}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <div className="header__search">
-            <input
-              type="text"
-              placeholder="Search by account name…"
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="search-input"
-            />
-            {search && (
-              <button className="search-clear" onClick={() => onSearchChange('')}>
-                ×
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Reason group sub-filters — only shown for Add / Remove / Reclassify */}
-        {reasonGroups && reasonGroups.length > 0 && (
+        {/* Reason group sub-filters — only for Review tab, Add / Remove / Reclassify */}
+        {view === 'review' && reasonGroups && reasonGroups.length > 0 && (
           <div className="header__reason-row">
             <div className="reason-pills">
               {reasonGroups.map(({ label, count }) => {

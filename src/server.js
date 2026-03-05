@@ -7,6 +7,7 @@ const cors = require('cors');
 const path = require('path');
 const { fetchAllAccounts } = require('./fetchData');
 const { processAccounts } = require('./tieringLogic');
+const sfdcClient = require('./sfdcClient');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -124,6 +125,24 @@ app.post('/api/fetch', async (req, res) => {
 });
 
 /**
+ * POST /api/reload
+ * Re-reads raw_accounts.json from disk, re-runs tiering, updates cache.
+ */
+app.post('/api/reload', (req, res) => {
+  try {
+    const fs = require('fs');
+    const rawPath = path.join(__dirname, '..', 'data', 'raw_accounts.json');
+    const raw = JSON.parse(fs.readFileSync(rawPath, 'utf8'));
+    accountsCache = processAccounts(raw);
+    fs.writeFileSync(path.join(__dirname, '..', 'data', 'accounts.json'), JSON.stringify(accountsCache));
+    console.log(`Reloaded: ${accountsCache.length} accounts processed.`);
+    res.json({ ok: true, count: accountsCache.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/accounts
  * Returns processed accounts.
  */
@@ -132,6 +151,64 @@ app.get('/api/accounts', (req, res) => {
     return res.status(404).json({ error: 'No data. Run /api/fetch first.' });
   }
   res.json(accountsCache);
+});
+
+/**
+ * GET /api/campaign
+ * Returns campaign info + member account IDs from disk.
+ */
+app.get('/api/campaign', (req, res) => {
+  try {
+    const fs = require('fs');
+    const campaignPath = path.join(__dirname, '..', 'data', 'campaign_members.json');
+    if (!fs.existsSync(campaignPath)) {
+      return res.status(404).json({ error: 'Campaign data not loaded.' });
+    }
+    res.json(JSON.parse(fs.readFileSync(campaignPath, 'utf8')));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/apply
+ * Builds a sync payload from the approved decisions and forwards it to
+ * Salesforce via sfdcClient (currently mocked — see src/sfdcClient.js).
+ *
+ * Body: { changes: [{ accountId, action, tier }, ...] }
+ *   - accountId : Salesforce Account ID
+ *   - action    : 'Add' | 'Remove' | 'Reclassify'
+ *   - tier      : 'Tier 1' | 'Tier 2' | 'Tier 3' | null
+ *
+ * The client sends the pre-computed payload (already filtered to pending
+ * changes), so the server just validates, passes to sfdcClient, and returns
+ * the result.
+ */
+app.post('/api/apply', async (req, res) => {
+  if (!accountsCache) {
+    return res.status(404).json({ error: 'No account data loaded.' });
+  }
+
+  const { changes } = req.body;
+  if (!Array.isArray(changes) || changes.length === 0) {
+    return res.status(400).json({ error: 'No changes provided.' });
+  }
+
+  // Validate each change entry
+  const valid = changes.every(
+    (c) => c.accountId && ['Add', 'Remove', 'Reclassify'].includes(c.action)
+  );
+  if (!valid) {
+    return res.status(400).json({ error: 'Invalid change entries.' });
+  }
+
+  try {
+    const result = await sfdcClient.applyChanges(changes);
+    res.json({ ok: true, result, changeCount: changes.length });
+  } catch (err) {
+    console.error('Apply error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 /**
