@@ -5,6 +5,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const { fetchAllAccounts } = require('./fetchData');
 const { processAccounts } = require('./tieringLogic');
 const sfdcClient = require('./sfdcClient');
@@ -19,23 +20,36 @@ app.use(express.json());
 const buildPath = path.join(__dirname, '..', 'client', 'build');
 app.use(express.static(buildPath));
 
-// In-memory state
-let accountsCache = null;
+// Persistent cache
+const CACHE_FILE = path.join(__dirname, '..', 'data', 'accounts-cache.json');
+
+function loadCache() {
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+      console.log(`Loaded ${data.length} accounts from cache.`);
+      return data;
+    }
+  } catch (e) {
+    console.warn('Could not load cache:', e.message);
+  }
+  return null;
+}
+
+function saveCache(data) {
+  try {
+    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(data), 'utf8');
+  } catch (e) {
+    console.warn('Could not save cache:', e.message);
+  }
+}
+
+// In-memory state (pre-loaded from disk)
+let accountsCache = loadCache();
 let isFetching = false;
 let fetchProgress = [];
 let fetchError = null;
-
-// Auto-load pre-fetched data on startup if available
-const dataPath = path.join(__dirname, '..', 'data', 'accounts.json');
-try {
-  const fs = require('fs');
-  if (fs.existsSync(dataPath)) {
-    accountsCache = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    console.log(`Loaded ${accountsCache.length} pre-fetched accounts from data/accounts.json`);
-  }
-} catch (e) {
-  console.warn('Could not load pre-fetched data:', e.message);
-}
 
 // SSE clients for progress streaming
 let sseClients = [];
@@ -107,14 +121,8 @@ app.post('/api/fetch', async (req, res) => {
   try {
     const rawAccounts = await fetchAllAccounts(sendProgress);
     accountsCache = processAccounts(rawAccounts);
+    saveCache(accountsCache);
     sendProgress(`Processing complete. ${accountsCache.length} accounts evaluated.`);
-    // Persist to disk so server restarts use fresh data
-    const fs = require('fs');
-    const dataDir = path.join(__dirname, '..', 'data');
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(path.join(dataDir, 'raw_accounts.json'), JSON.stringify(rawAccounts));
-    fs.writeFileSync(path.join(dataDir, 'accounts.json'), JSON.stringify(accountsCache));
-    sendProgress('Data saved to disk.');
   } catch (err) {
     fetchError = err;
     sendProgress(`ERROR: ${err.message}`);
@@ -130,11 +138,10 @@ app.post('/api/fetch', async (req, res) => {
  */
 app.post('/api/reload', (req, res) => {
   try {
-    const fs = require('fs');
-    const rawPath = path.join(__dirname, '..', 'data', 'raw_accounts.json');
+    const rawPath = path.join(__dirname, '..', 'data', 'raw-accounts.json');
     const raw = JSON.parse(fs.readFileSync(rawPath, 'utf8'));
     accountsCache = processAccounts(raw);
-    fs.writeFileSync(path.join(__dirname, '..', 'data', 'accounts.json'), JSON.stringify(accountsCache));
+    saveCache(accountsCache);
     console.log(`Reloaded: ${accountsCache.length} accounts processed.`);
     res.json({ ok: true, count: accountsCache.length });
   } catch (err) {

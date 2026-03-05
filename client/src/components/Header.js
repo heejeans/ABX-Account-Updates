@@ -11,7 +11,6 @@ export default function Header({
   onApproveGroup,
   onRejectGroup,
   filteredAccounts,
-  onApproveAll,
   onReset,
   onRefetch,
   approvedCount,
@@ -92,11 +91,6 @@ export default function Header({
             <button className="btn btn-outline" onClick={onReset}>
               Reset
             </button>
-            {view === 'review' && (
-              <button className="btn btn-success" onClick={onApproveAll}>
-                Approve All
-              </button>
-            )}
           </div>
         </div>
 

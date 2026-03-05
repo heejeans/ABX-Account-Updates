@@ -8,9 +8,9 @@
       "port": 3000
     },
     {
-      "name": "Frontend (React dev)",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["-e", "process.chdir('/Users/joy.son/Documents/ABX-Account-Updates/client'); require('/Users/joy.son/Documents/ABX-Account-Updates/client/node_modules/react-scripts/scripts/start.js')"],
+      "name": "Frontend (React)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "client", "start"],
       "port": 3001
     }
   ]
