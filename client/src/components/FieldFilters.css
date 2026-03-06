@@ -73,6 +73,8 @@
   min-width: 190px;
   padding: 6px;
   border-right: 1px solid #f3f4f6;
+  max-height: 360px;
+  overflow-y: auto;
 }
 
 .ff-category {

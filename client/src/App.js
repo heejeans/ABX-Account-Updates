@@ -270,7 +270,7 @@ export default function App() {
     const FIT_ORDER    = ['9+ (High)', '5–8 (Med)', '< 5 (Low)', 'No Score'];
     const intents = new Set(), stages = new Set(), segments = new Set(),
           currentTiers = new Set(), recTiers = new Set(),
-          fitRanges = new Set(), dnns = new Set();
+          fitRanges = new Set(), dnns = new Set(), clYears = new Set();
     baseAccounts.forEach((a) => {
       intents.add(a.Account_Intent__c || 'None');
       if (a.Account_Stage__c)  stages.add(a.Account_Stage__c);
@@ -283,6 +283,7 @@ export default function App() {
       else if (fit <= 8) fitRanges.add('5–8 (Med)');
       else               fitRanges.add('9+ (High)');
       dnns.add(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN');
+      clYears.add(a.Entered_Closed_Lost_Date__c ? a.Entered_Closed_Lost_Date__c.slice(0, 4) : 'No Date');
     });
     const tierSort = (a, b) => a === 'No Tier' ? 1 : b === 'No Tier' ? -1 : a.localeCompare(b);
     return {
@@ -293,11 +294,12 @@ export default function App() {
       recommendedTier: [...recTiers].sort(tierSort).map(v => ({ value: v, label: v })),
       fitRange:        FIT_ORDER.filter(v => fitRanges.has(v)).map(v => ({ value: v, label: v })),
       isDnn:           [...dnns].sort().map(v => ({ value: v, label: v })),
+      closedLostYear:  [...clYears].sort((a, b) => a === 'No Date' ? 1 : b === 'No Date' ? -1 : b.localeCompare(a)).map(v => ({ value: v, label: v })),
     };
   }, [baseAccounts]);
 
   const filteredAccounts = useMemo(() => baseAccounts.filter((a) => {
-    const { intent, stage, segment, fitRange, currentTier, recommendedTier, isDnn } = fieldFilters;
+    const { intent, stage, segment, fitRange, currentTier, recommendedTier, isDnn, closedLostYear } = fieldFilters;
     if (intent?.length && !intent.includes(a.Account_Intent__c || 'None')) return false;
     if (stage?.length  && !stage.includes(a.Account_Stage__c || ''))       return false;
     if (segment?.length && !segment.includes(a.Sales_Segment__c || ''))    return false;
@@ -310,6 +312,10 @@ export default function App() {
     }
     if (isDnn?.length) {
       if (!isDnn.includes(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN')) return false;
+    }
+    if (closedLostYear?.length) {
+      const year = a.Entered_Closed_Lost_Date__c ? a.Entered_Closed_Lost_Date__c.slice(0, 4) : 'No Date';
+      if (!closedLostYear.includes(year)) return false;
     }
     return true;
   }), [baseAccounts, fieldFilters]);
