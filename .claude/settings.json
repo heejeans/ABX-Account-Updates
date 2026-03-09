@@ -9,6 +9,16 @@
           }
         ]
       }
+    ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Worktrees are disabled for this project. Work directly on the main branch.' && exit 1"
+          }
+        ]
+      }
     ]
   }
 }
