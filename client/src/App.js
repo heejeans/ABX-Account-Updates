@@ -283,7 +283,7 @@ export default function App() {
       else if (fit <= 8) fitRanges.add('5–8 (Med)');
       else               fitRanges.add('9+ (High)');
       dnns.add(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN');
-      clYears.add(a.Entered_Closed_Lost_Date__c ? a.Entered_Closed_Lost_Date__c.slice(0, 4) : 'No Date');
+      clYears.add(a.Entered_Closed_Lost_Date__c || 'No Date');
     });
     const tierSort = (a, b) => a === 'No Tier' ? 1 : b === 'No Tier' ? -1 : a.localeCompare(b);
     return {
@@ -314,8 +314,8 @@ export default function App() {
       if (!isDnn.includes(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN')) return false;
     }
     if (closedLostYear?.length) {
-      const year = a.Entered_Closed_Lost_Date__c ? a.Entered_Closed_Lost_Date__c.slice(0, 4) : 'No Date';
-      if (!closedLostYear.includes(year)) return false;
+      const date = a.Entered_Closed_Lost_Date__c || 'No Date';
+      if (!closedLostYear.includes(date)) return false;
     }
     return true;
   }), [baseAccounts, fieldFilters]);

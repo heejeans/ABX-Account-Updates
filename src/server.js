@@ -277,5 +277,5 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\nABX Account Updates server running on http://localhost:${PORT}`);
-  console.log(`API key configured: ${process.env.ANTHROPIC_API_KEY ? 'YES' : 'NO — set ANTHROPIC_API_KEY in .env'}`);
+  console.log(`Sweep MCP URL configured: ${process.env.SWEEP_MCP_URL ? 'YES' : 'NO — set SWEEP_MCP_URL in .env'}`);
 });

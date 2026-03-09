@@ -224,7 +224,8 @@ export default function CampaignPage({
     const INTENT_ORDER = ['High', 'Medium', 'Low', 'None'];
     const FIT_ORDER    = ['9+ (High)', '5–8 (Med)', '< 5 (Low)', 'No Score'];
     const intents = new Set(), stages = new Set(), segments = new Set(),
-          currentTiers = new Set(), fitRanges = new Set(), dnns = new Set();
+          currentTiers = new Set(), fitRanges = new Set(), dnns = new Set(),
+          clYears = new Set();
     rows.forEach((a) => {
       intents.add(a.Account_Intent__c || 'None');
       if (a.Account_Stage__c) stages.add(a.Account_Stage__c);
@@ -236,15 +237,17 @@ export default function CampaignPage({
       else if (fit <= 8) fitRanges.add('5–8 (Med)');
       else               fitRanges.add('9+ (High)');
       dnns.add(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN');
+      clYears.add(a.Entered_Closed_Lost_Date__c || 'No Date');
     });
     const tierSort = (a, b) => a === 'No Tier' ? 1 : b === 'No Tier' ? -1 : a.localeCompare(b);
     return {
-      intent:      INTENT_ORDER.filter(v => intents.has(v)).map(v => ({ value: v, label: v })),
-      stage:       [...stages].sort().map(v => ({ value: v, label: v })),
-      segment:     [...segments].sort().map(v => ({ value: v, label: v })),
-      currentTier: [...currentTiers].sort(tierSort).map(v => ({ value: v, label: v })),
-      fitRange:    FIT_ORDER.filter(v => fitRanges.has(v)).map(v => ({ value: v, label: v })),
-      isDnn:       [...dnns].sort().map(v => ({ value: v, label: v })),
+      intent:         INTENT_ORDER.filter(v => intents.has(v)).map(v => ({ value: v, label: v })),
+      stage:          [...stages].sort().map(v => ({ value: v, label: v })),
+      segment:        [...segments].sort().map(v => ({ value: v, label: v })),
+      currentTier:    [...currentTiers].sort(tierSort).map(v => ({ value: v, label: v })),
+      fitRange:       FIT_ORDER.filter(v => fitRanges.has(v)).map(v => ({ value: v, label: v })),
+      isDnn:          [...dnns].sort().map(v => ({ value: v, label: v })),
+      closedLostYear: [...clYears].sort((a, b) => a === 'No Date' ? 1 : b === 'No Date' ? -1 : b.localeCompare(a)).map(v => ({ value: v, label: v })),
     };
   }, [rows]);
 
@@ -260,7 +263,7 @@ export default function CampaignPage({
       base = rows.filter((r) => r.syncStatus === filter && !cpApproved.has(r.Id) && !cpRejected.has(r.Id));
     }
 
-    const { intent, stage, segment, fitRange, currentTier, isDnn } = fieldFilters;
+    const { intent, stage, segment, fitRange, currentTier, isDnn, closedLostYear } = fieldFilters;
     base = base.filter((a) => {
       if (intent?.length      && !intent.includes(a.Account_Intent__c || 'None'))   return false;
       if (stage?.length       && !stage.includes(a.Account_Stage__c || ''))         return false;
@@ -272,6 +275,10 @@ export default function CampaignPage({
         if (!fitRange.includes(bucket)) return false;
       }
       if (isDnn?.length && !isDnn.includes(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN')) return false;
+      if (closedLostYear?.length) {
+        const date = a.Entered_Closed_Lost_Date__c || 'No Date';
+        if (!closedLostYear.includes(date)) return false;
+      }
       return true;
     });
 

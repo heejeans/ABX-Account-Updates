@@ -19,7 +19,7 @@ export default function FetchPanel({ status, progressLines, onFetch }) {
           <span className="fetch-panel__logo-title">ABX Tier Review</span>
         </div>
         <p className="fetch-panel__desc">
-          Fetch account data from Salesforce via Anthropic + Sweep MCP, then run the tiering framework locally.
+          Fetch account data from Salesforce via Sweep MCP, then run the tiering framework locally.
         </p>
 
         {status.fetchError && (
