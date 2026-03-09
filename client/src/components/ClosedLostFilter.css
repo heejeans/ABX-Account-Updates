@@ -1,0 +1,160 @@
+.clf-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+/* ── Trigger button ── */
+.clf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.clf-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.clf-btn--open {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.clf-btn--active {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.clf-btn__label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.clf-btn__clear {
+  font-size: 15px;
+  font-weight: 700;
+  color: #93c5fd;
+  margin-left: 1px;
+  line-height: 1;
+}
+
+.clf-btn__clear:hover {
+  color: #dc2626;
+}
+
+/* ── Dropdown panel ── */
+.clf-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 300;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+  min-width: 230px;
+  padding: 8px 0 10px;
+}
+
+.clf-section-label {
+  padding: 6px 12px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9ca3af;
+}
+
+.clf-option {
+  display: block;
+  width: 100%;
+  padding: 7px 14px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: #374151;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.clf-option:hover {
+  background: #f3f4f6;
+}
+
+.clf-option--active {
+  color: #1d4ed8;
+  font-weight: 600;
+  background: #eff6ff;
+}
+
+.clf-divider {
+  margin: 6px 0;
+  border-top: 1px solid #f3f4f6;
+}
+
+/* ── Custom date range ── */
+.clf-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 4px;
+  flex-wrap: wrap;
+}
+
+.clf-date-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 5px 7px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 12px;
+  color: #374151;
+  outline: none;
+  background: #fff;
+}
+
+.clf-date-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px #dbeafe;
+}
+
+.clf-custom__sep {
+  font-size: 11px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.clf-apply-btn {
+  padding: 5px 11px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+  flex-shrink: 0;
+}
+
+.clf-apply-btn:hover {
+  background: #1d4ed8;
+}

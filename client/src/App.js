@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Header from './components/Header';
 import AccountList from './components/AccountList';
 import FieldFilters from './components/FieldFilters';
+import ClosedLostFilter, { matchesClosedLostFilter } from './components/ClosedLostFilter';
 import FetchPanel from './components/FetchPanel';
 import CampaignPage from './components/CampaignPage';
 import './App.css';
@@ -48,6 +49,7 @@ export default function App() {
   const [activeFilter, setActiveFilter] = useState('Current ABX');
   const [activeReasonFilter, setActiveReasonFilter] = useState(null);
   const [fieldFilters, setFieldFilters] = useState({});
+  const [closedLostRange, setClosedLostRange] = useState(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState({ isFetching: false, hasData: false, accountCount: 0, fetchError: null });
   const [progressLines, setProgressLines] = useState([]);
@@ -70,6 +72,7 @@ export default function App() {
       setRejected(new Set());
       setCpApproved(new Set());
       setCpRejected(new Set());
+      setClosedLostRange(null);
     } catch (_) {}
   }, []);
 
@@ -156,6 +159,8 @@ export default function App() {
   const handleReset = useCallback(() => {
     setApproved(new Set());
     setRejected(new Set());
+    setClosedLostRange(null);
+    setFieldFilters({});
   }, []);
 
   const handleCpApprove = useCallback((id) => {
@@ -270,7 +275,7 @@ export default function App() {
     const FIT_ORDER    = ['9+ (High)', '5–8 (Med)', '< 5 (Low)', 'No Score'];
     const intents = new Set(), stages = new Set(), segments = new Set(),
           currentTiers = new Set(), recTiers = new Set(),
-          fitRanges = new Set(), dnns = new Set(), clYears = new Set();
+          fitRanges = new Set(), dnns = new Set();
     baseAccounts.forEach((a) => {
       intents.add(a.Account_Intent__c || 'None');
       if (a.Account_Stage__c)  stages.add(a.Account_Stage__c);
@@ -283,7 +288,6 @@ export default function App() {
       else if (fit <= 8) fitRanges.add('5–8 (Med)');
       else               fitRanges.add('9+ (High)');
       dnns.add(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN');
-      clYears.add(a.Entered_Closed_Lost_Date__c || 'No Date');
     });
     const tierSort = (a, b) => a === 'No Tier' ? 1 : b === 'No Tier' ? -1 : a.localeCompare(b);
     return {
@@ -294,12 +298,11 @@ export default function App() {
       recommendedTier: [...recTiers].sort(tierSort).map(v => ({ value: v, label: v })),
       fitRange:        FIT_ORDER.filter(v => fitRanges.has(v)).map(v => ({ value: v, label: v })),
       isDnn:           [...dnns].sort().map(v => ({ value: v, label: v })),
-      closedLostYear:  [...clYears].sort((a, b) => a === 'No Date' ? 1 : b === 'No Date' ? -1 : b.localeCompare(a)).map(v => ({ value: v, label: v })),
     };
   }, [baseAccounts]);
 
   const filteredAccounts = useMemo(() => baseAccounts.filter((a) => {
-    const { intent, stage, segment, fitRange, currentTier, recommendedTier, isDnn, closedLostYear } = fieldFilters;
+    const { intent, stage, segment, fitRange, currentTier, recommendedTier, isDnn } = fieldFilters;
     if (intent?.length && !intent.includes(a.Account_Intent__c || 'None')) return false;
     if (stage?.length  && !stage.includes(a.Account_Stage__c || ''))       return false;
     if (segment?.length && !segment.includes(a.Sales_Segment__c || ''))    return false;
@@ -313,12 +316,9 @@ export default function App() {
     if (isDnn?.length) {
       if (!isDnn.includes(a.Marketplace_Prospect__c ? 'DNN' : 'Non-DNN')) return false;
     }
-    if (closedLostYear?.length) {
-      const date = a.Entered_Closed_Lost_Date__c || 'No Date';
-      if (!closedLostYear.includes(date)) return false;
-    }
+    if (!matchesClosedLostFilter(a, closedLostRange)) return false;
     return true;
-  }), [baseAccounts, fieldFilters]);
+  }), [baseAccounts, fieldFilters, closedLostRange]);
 
   // Campaign sync stats — reflects both Review and Campaign-level approvals.
   const campaignStats = useMemo(() => {
@@ -461,6 +461,10 @@ export default function App() {
                         <button className="toolbar-search__clear" onClick={() => setSearch('')}>×</button>
                       )}
                     </div>
+                    <ClosedLostFilter
+                      value={closedLostRange}
+                      onChange={setClosedLostRange}
+                    />
                     <FieldFilters
                       fieldOptions={fieldOptions}
                       filters={fieldFilters}

@@ -9,7 +9,6 @@ const FIELD_CONFIGS = [
   { key: 'currentTier',     label: 'Current Tier' },
   { key: 'recommendedTier', label: 'Projected Tier' },
   { key: 'isDnn',           label: 'DNN' },
-  { key: 'closedLostYear',  label: 'CL Date' },
 ];
 
 export default function FieldFilters({ fieldOptions, filters, onFilterChange }) {
