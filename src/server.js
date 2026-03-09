@@ -277,5 +277,11 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\nABX Account Updates server running on http://localhost:${PORT}`);
-  console.log(`Sweep MCP URL configured: ${process.env.SWEEP_MCP_URL ? 'YES' : 'NO — set SWEEP_MCP_URL in .env'}`);
+  if (process.env.SWEEP_MCP_TOKEN) {
+    console.log('Fetch method: Direct Sweep MCP (SWEEP_MCP_TOKEN configured)');
+  } else if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+    console.log('Fetch method: Claude session Sweep connector (OAuth token present)');
+  } else {
+    console.log('Fetch method: None configured — use /fetch-sfdc Claude command or add SWEEP_MCP_TOKEN to .env');
+  }
 });
