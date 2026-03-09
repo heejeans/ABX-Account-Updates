@@ -197,3 +197,151 @@
   color: #2563eb;
   flex-shrink: 0;
 }
+
+/* Date panel (right side when Entered Closed Lost Date is active) */
+.ff-date-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  padding: 8px 6px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.ff-date-section-label {
+  padding: 4px 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.ff-date-divider {
+  height: 1px;
+  background: #f3f4f6;
+  margin: 6px 10px;
+}
+
+.ff-date-relative-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.ff-date-last {
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.ff-date-num {
+  width: 54px;
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #111827;
+  text-align: center;
+}
+
+.ff-date-num:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.ff-date-unit {
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #374151;
+  background: #fff;
+  cursor: pointer;
+}
+
+.ff-date-unit:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.ff-date-apply {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 5px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.ff-date-apply:hover {
+  background: #1d4ed8;
+}
+
+.ff-date-apply:disabled {
+  background: #d1d5db;
+  cursor: default;
+}
+
+.ff-date-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  flex-wrap: wrap;
+}
+
+.ff-date-input {
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #374151;
+}
+
+.ff-date-input:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.ff-date-sep {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.ff-date-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 2px 10px 4px;
+  padding: 2px 8px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ff-date-chip-clear {
+  border: none;
+  background: none;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 1px;
+  font-family: inherit;
+}
+
+.ff-date-chip-clear:hover {
+  color: #dc2626;
+}

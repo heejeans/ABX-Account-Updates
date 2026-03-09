@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Header from './components/Header';
 import AccountList from './components/AccountList';
 import FieldFilters from './components/FieldFilters';
-import ClosedLostFilter, { matchesClosedLostFilter } from './components/ClosedLostFilter';
+import { matchesClosedLostFilter } from './components/ClosedLostFilter';
 import FetchPanel from './components/FetchPanel';
 import CampaignPage from './components/CampaignPage';
 import './App.css';
@@ -461,14 +461,12 @@ export default function App() {
                         <button className="toolbar-search__clear" onClick={() => setSearch('')}>×</button>
                       )}
                     </div>
-                    <ClosedLostFilter
-                      value={closedLostRange}
-                      onChange={setClosedLostRange}
-                    />
                     <FieldFilters
                       fieldOptions={fieldOptions}
                       filters={fieldFilters}
                       onFilterChange={handleFieldFilterChange}
+                      closedLostRange={closedLostRange}
+                      onClosedLostRangeChange={setClosedLostRange}
                     />
                   </div>
                 </div>

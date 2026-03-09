@@ -37,8 +37,10 @@ export function getClosedLostBounds(range) {
 
   if (range.type === 'relative') {
     const start = new Date(now);
-    if (range.unit === 'weeks') start.setDate(start.getDate() - range.value * 7);
-    else                        start.setMonth(start.getMonth() - range.value);
+    if      (range.unit === 'weeks')    start.setDate(start.getDate() - range.value * 7);
+    else if (range.unit === 'months')   start.setMonth(start.getMonth() - range.value);
+    else if (range.unit === 'quarters') start.setMonth(start.getMonth() - range.value * 3);
+    else if (range.unit === 'years')    start.setFullYear(start.getFullYear() - range.value);
     return { start, end: now };
   }
 
@@ -82,16 +84,15 @@ export function matchesClosedLostFilter(account, range) {
 
 // ─── Label ───────────────────────────────────────────────────────────────────
 
-function rangeLabel(range) {
+export function rangeLabel(range) {
   if (!range) return null;
   const now   = new Date();
   const curFY = getFiscalYear(now);
   const curQ  = getFiscalQuarter(now);
 
   if (range.type === 'relative') {
-    return range.unit === 'weeks'
-      ? `Last ${range.value}w`
-      : `Last ${range.value}mo`;
+    const u = range.unit === 'weeks' ? 'w' : range.unit === 'months' ? 'mo' : range.unit === 'quarters' ? 'FQ' : 'FY';
+    return `Last ${range.value}${u}`;
   }
   if (range.type === 'fiscal-quarter') {
     if (range.value === 1) return `Q${curQ} FY${curFY}`;
@@ -110,7 +111,7 @@ function rangeLabel(range) {
   return null;
 }
 
-function rangesEqual(a, b) {
+export function rangesEqual(a, b) {
   if (a === b) return true;
   if (!a || !b) return false;
   return JSON.stringify(a) === JSON.stringify(b);
@@ -126,7 +127,7 @@ const RELATIVE_PRESETS = [
   { label: 'Last 12 months', range: { type: 'relative', unit: 'months', value: 12 } },
 ];
 
-function buildFiscalPresets() {
+export function buildFiscalPresets() {
   const now   = new Date();
   const curFY = getFiscalYear(now);
   const curQ  = getFiscalQuarter(now);

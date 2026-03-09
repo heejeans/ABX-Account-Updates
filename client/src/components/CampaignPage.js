@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import FieldFilters from './FieldFilters';
-import ClosedLostFilter, { matchesClosedLostFilter } from './ClosedLostFilter';
+import { matchesClosedLostFilter } from './ClosedLostFilter';
 import './CampaignPage.css';
 
 const SF_ACCT_BASE = 'https://cloudzero.lightning.force.com/lightning/r/Account';
@@ -363,14 +363,12 @@ export default function CampaignPage({
               <button className="toolbar-search__clear" onClick={() => setSearch('')}>×</button>
             )}
           </div>
-          <ClosedLostFilter
-            value={closedLostRange}
-            onChange={setClosedLostRange}
-          />
           <FieldFilters
             fieldOptions={fieldOptions}
             filters={fieldFilters}
             onFilterChange={handleFieldFilterChange}
+            closedLostRange={closedLostRange}
+            onClosedLostRangeChange={setClosedLostRange}
           />
         </div>
       </div>
