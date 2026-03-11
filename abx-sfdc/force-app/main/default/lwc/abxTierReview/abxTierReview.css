@@ -218,3 +218,127 @@
     max-height: 240px;
     overflow-y: auto;
 }
+
+/* ── Dynamic Field Picker (Filter Panel) ───────────────────────────── */
+
+.filter-cat--add {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #2563eb;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 4px;
+    transition: background 0.1s;
+}
+
+.filter-cat--add:hover {
+    background: #eff6ff;
+}
+
+.filter-cat__remove {
+    display: inline-block;
+    margin-left: 4px;
+    color: #9ca3af;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.filter-cat__remove:hover {
+    color: #dc2626;
+}
+
+.dynamic-field-picker {
+    position: absolute;
+    left: 140px;
+    top: 0;
+    z-index: 300;
+    width: 280px;
+    max-height: 340px;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+.dynamic-field-picker__list {
+    overflow-y: auto;
+    max-height: 280px;
+    flex: 1;
+}
+
+.dynamic-field-item {
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.1s;
+}
+
+.dynamic-field-item:hover {
+    background: #eff6ff;
+}
+
+.dynamic-field-item__label {
+    display: block;
+    font-size: 13px;
+    color: #374151;
+    font-weight: 500;
+}
+
+.dynamic-field-item__api {
+    display: block;
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+/* ── Dynamic Field Picker (Expanded Detail) ────────────────────────── */
+
+.detail-add-field-btn {
+    font-size: 12px;
+    color: #2563eb;
+    cursor: pointer;
+}
+
+.detail-add-field-btn:hover {
+    text-decoration: underline;
+}
+
+.detail-field-picker {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    z-index: 300;
+    width: 280px;
+    max-height: 300px;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+    padding: 8px;
+    margin-top: 2px;
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-field-picker__list {
+    overflow-y: auto;
+    max-height: 240px;
+    flex: 1;
+}
+
+.dynamic-detail-remove {
+    margin-left: 6px;
+    color: #9ca3af;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.dynamic-detail-remove:hover {
+    color: #dc2626;
+}

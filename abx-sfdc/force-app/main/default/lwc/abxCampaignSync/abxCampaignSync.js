@@ -9,6 +9,8 @@ const FIELD_CONFIGS = [
     { key: 'currentTier', label: 'Current Tier', field: 'currentTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
     { key: 'dnn', label: 'DNN', field: null },
     { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory' },
+    { key: 'accountExecutive', label: 'Account Executive', field: 'accountExecutiveName' },
+    { key: 'accountDevOwner', label: 'Account Dev Owner', field: 'accountDevOwnerName' },
     { key: 'aeStatus', label: 'AE Assigned', field: null },
 ];
 
@@ -174,6 +176,7 @@ export default class AbxCampaignSync extends LightningElement {
             dnnDisplay: r.isDnn ? 'Yes' : 'No',
             aeTerritoryDisplay: r.aeTerritory || null,
             accountExecutiveName: r.accountExecutiveName || null,
+            accountDevOwnerName: r.accountDevOwnerName || null,
             hasAE: !!r.accountExecutiveName,
             isCpApproved: this.cpApprovedIds.has(r.id),
             isCpRejected: this.cpRejectedIds.has(r.id),

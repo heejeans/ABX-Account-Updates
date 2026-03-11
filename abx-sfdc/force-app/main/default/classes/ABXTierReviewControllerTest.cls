@@ -309,4 +309,71 @@ private class ABXTierReviewControllerTest {
         Account updated = [SELECT Account_Executive_Owner__c FROM Account WHERE Id = :prospect.Id];
         System.assertEquals(null, updated.Account_Executive_Owner__c, 'AE should be cleared');
     }
+
+    // ─── getAccountFieldDescribe tests ──────────────────────────────────────────
+
+    @isTest
+    static void testGetAccountFieldDescribe_ReturnsData() {
+        Test.startTest();
+        List<ABXTierReviewController.FieldDescribeResult> fields =
+            ABXTierReviewController.getAccountFieldDescribe();
+        Test.stopTest();
+
+        System.assertNotEquals(null, fields, 'Fields should not be null');
+        System.assert(fields.size() > 0, 'Should return Account fields');
+
+        Boolean hasName = false;
+        for (ABXTierReviewController.FieldDescribeResult f : fields) {
+            if (f.apiName == 'Name') hasName = true;
+        }
+        System.assert(hasName, 'Should include Name field');
+    }
+
+    // ─── getDynamicFieldValues tests ────────────────────────────────────────────
+
+    @isTest
+    static void testGetDynamicFieldValues_Success() {
+        Account testAcct = [SELECT Id FROM Account WHERE Name = 'Test Tiered Enterprise' LIMIT 1];
+
+        Test.startTest();
+        Map<Id, Map<String, Object>> result = ABXTierReviewController.getDynamicFieldValues(
+            new List<String>{ 'Name', 'Sales_Segment__c' },
+            new List<Id>{ testAcct.Id }
+        );
+        Test.stopTest();
+
+        System.assertNotEquals(null, result, 'Result should not be null');
+        System.assert(result.containsKey(testAcct.Id), 'Should contain the account');
+        Map<String, Object> vals = result.get(testAcct.Id);
+        System.assertEquals('Test Tiered Enterprise', vals.get('Name'));
+        // Segment may be changed by org automations after insert, so just verify it returned a value
+        System.assertNotEquals(null, vals.get('Sales_Segment__c'), 'Sales_Segment__c should be populated');
+    }
+
+    @isTest
+    static void testGetDynamicFieldValues_InvalidFields() {
+        Account testAcct = [SELECT Id FROM Account LIMIT 1];
+
+        Test.startTest();
+        Map<Id, Map<String, Object>> result = ABXTierReviewController.getDynamicFieldValues(
+            new List<String>{ 'Not_A_Real_Field__c' },
+            new List<Id>{ testAcct.Id }
+        );
+        Test.stopTest();
+
+        // Invalid fields are filtered out; empty valid list → empty result
+        System.assert(result.isEmpty(), 'Should be empty for invalid fields');
+    }
+
+    @isTest
+    static void testGetDynamicFieldValues_EmptyInputs() {
+        Test.startTest();
+        Map<Id, Map<String, Object>> result = ABXTierReviewController.getDynamicFieldValues(
+            new List<String>(),
+            new List<Id>()
+        );
+        Test.stopTest();
+
+        System.assert(result.isEmpty(), 'Should be empty for empty inputs');
+    }
 }

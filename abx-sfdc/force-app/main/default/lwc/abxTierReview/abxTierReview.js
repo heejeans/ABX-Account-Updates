@@ -7,6 +7,8 @@ import applyTierChanges from '@salesforce/apex/ABXTierReviewController.applyTier
 import syncCampaignMembership from '@salesforce/apex/ABXTierReviewController.syncCampaignMembership';
 import getAEUsers from '@salesforce/apex/ABXTierReviewController.getAEUsers';
 import assignAccountExecutives from '@salesforce/apex/ABXTierReviewController.assignAccountExecutives';
+import getAccountFieldDescribe from '@salesforce/apex/ABXTierReviewController.getAccountFieldDescribe';
+import getDynamicFieldValues from '@salesforce/apex/ABXTierReviewController.getDynamicFieldValues';
 
 // Action badge CSS classes
 const ACTION_CLASSES = {
@@ -27,6 +29,8 @@ const FIELD_CONFIGS = [
     { key: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
     { key: 'dnn', label: 'DNN', field: null },  // special boolean
     { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory' },
+    { key: 'accountExecutive', label: 'Account Executive', field: 'accountExecutiveName' },
+    { key: 'accountDevOwner', label: 'Account Dev Owner', field: 'accountDevOwnerName' },
     { key: 'aeStatus', label: 'AE Assigned', field: null },
 ];
 
@@ -37,12 +41,23 @@ function getFitBucket(fitScore) {
     return '< 5 (Low)';
 }
 
-function getFieldValue(account, config) {
+function getFieldValue(account, config, dynamicFieldValues) {
     if (config.key === 'fitBucket') return getFitBucket(account.fitScore);
     if (config.key === 'dnn') return account.isDnn ? 'DNN' : 'Non-DNN';
     if (config.key === 'aeStatus') return account.accountExecutiveName ? 'Assigned' : 'Unassigned';
     if (config.key === 'currentTier') return account.currentTier || 'No Tier';
     if (config.key === 'recommendedTier') return account.recommendedTier || 'No Tier';
+    // Dynamic field lookup
+    if (config.isDynamic && dynamicFieldValues) {
+        const accountVals = dynamicFieldValues[account.id];
+        if (accountVals) {
+            const val = accountVals[config.apiName];
+            if (val === true) return 'Yes';
+            if (val === false) return 'No';
+            return val != null ? String(val) : 'None';
+        }
+        return 'None';
+    }
     return account[config.field] || 'None';
 }
 
@@ -112,6 +127,17 @@ export default class AbxTierReview extends LightningElement {
     @track bulkAESearchTerm = '';
     isAssigningAE = false;
 
+    // Dynamic field state
+    @track accountFieldDescribe = [];
+    @track dynamicFilterFields = [];
+    @track dynamicDetailFields = [];
+    @track dynamicFieldValues = {};
+    @track dynamicFieldSearchTerm = '';
+    @track detailFieldSearchTerm = '';
+    @track showDynamicFieldPicker = false;
+    @track showDetailFieldPicker = false;
+    isDynamicFieldsLoading = false;
+
     _wiredAccountResult;
     _wiredCampaignResult;
 
@@ -147,6 +173,14 @@ export default class AbxTierReview extends LightningElement {
             this.aeUsers = result.data;
         } else if (result.error) {
             console.warn('Failed to load AE users:', result.error);
+        }
+    }
+
+    // Account field describe for dynamic field picker
+    @wire(getAccountFieldDescribe)
+    wiredFieldDescribe(result) {
+        if (result.data) {
+            this.accountFieldDescribe = [...result.data].sort((a, b) => a.label.localeCompare(b.label));
         }
     }
 
@@ -245,12 +279,13 @@ export default class AbxTierReview extends LightningElement {
     get filteredAccounts() {
         let base = this.baseFilteredAccounts;
 
-        // Apply field filters
+        // Apply field filters (static + dynamic)
         const activeFilters = this.fieldFilters;
-        for (const config of FIELD_CONFIGS) {
+        const dynVals = this.dynamicFieldValues;
+        for (const config of this.allFieldConfigs) {
             const selected = activeFilters[config.key];
             if (selected && selected.size > 0) {
-                base = base.filter(a => selected.has(getFieldValue(a, config)));
+                base = base.filter(a => selected.has(getFieldValue(a, config, dynVals)));
             }
         }
 
@@ -294,11 +329,25 @@ export default class AbxTierReview extends LightningElement {
         return this.hasActiveFieldFilters ? 'brand' : 'neutral';
     }
 
+    get allFieldConfigs() {
+        return [
+            ...FIELD_CONFIGS,
+            ...this.dynamicFilterFields.map(f => ({
+                key: f.key,
+                label: f.label,
+                field: null,
+                apiName: f.apiName,
+                isDynamic: true,
+            })),
+        ];
+    }
+
     get filterCategories() {
         const accounts = this.baseFilteredAccounts;
-        return FIELD_CONFIGS.map(config => {
+        const dynVals = this.dynamicFieldValues;
+        return this.allFieldConfigs.map(config => {
             const values = new Set();
-            accounts.forEach(a => values.add(getFieldValue(a, config)));
+            accounts.forEach(a => values.add(getFieldValue(a, config, dynVals)));
             if (values.size <= 1) return null; // skip single-value categories
 
             let sortedValues;
@@ -312,6 +361,7 @@ export default class AbxTierReview extends LightningElement {
             return {
                 key: config.key,
                 label: config.label,
+                isDynamic: !!config.isDynamic,
                 isActive: this.activeFilterCategory === config.key,
                 catClass: this.activeFilterCategory === config.key
                     ? 'filter-cat filter-cat--active' : 'filter-cat',
@@ -320,7 +370,7 @@ export default class AbxTierReview extends LightningElement {
                     value: v,
                     label: v,
                     checked: selected.has(v),
-                    count: accounts.filter(a => getFieldValue(a, config) === v).length,
+                    count: accounts.filter(a => getFieldValue(a, config, dynVals) === v).length,
                 })),
             };
         }).filter(Boolean);
@@ -398,33 +448,54 @@ export default class AbxTierReview extends LightningElement {
     // ─── Computed: Datatable rows ─────────────────────────────────────────────
 
     get datatableRows() {
-        return this.filteredAccounts.map(a => ({
-            ...a,
-            accountUrl: `/lightning/r/Account/${a.id}/view`,
-            actionClass: ACTION_CLASSES[a.action] || 'slds-badge',
-            fitScoreDisplay: a.fitScore != null ? String(a.fitScore) : '—',
-            intentDisplay: a.intent || '—',
-            stageDisplay: a.stage || '—',
-            dnnDisplay: a.isDnn ? 'Yes' : 'No',
-            aeTerritoryDisplay: a.aeTerritory || null,
-            accountExecutiveName: a.accountExecutiveName || null,
-            accountExecutiveId: a.accountExecutiveId || null,
-            hasAE: !!a.accountExecutiveName,
-            aeSearchTerm: this.aeSearchTerms[a.id] || '',
-            showAEDropdown: this.activeAEDropdownId === a.id,
-            filteredAEUsers: this._getFilteredAEUsers(a.id),
-            hasPendingAE: this.aeAssignments.hasOwnProperty(a.id),
-            isApproved: this.approvedIds.has(a.id),
-            isRejected: this.rejectedIds.has(a.id),
-            isSelected: this.selectedIds.has(a.id),
-            isActionable: ['Add', 'Remove', 'Reclassify'].includes(a.action)
-                && !this.approvedIds.has(a.id),
-            statusLabel: this.approvedIds.has(a.id) ? 'Approved' :
-                this.rejectedIds.has(a.id) ? 'Rejected' : 'Pending',
-            statusClass: this.approvedIds.has(a.id) ? 'slds-text-color_success' :
-                this.rejectedIds.has(a.id) ? 'slds-text-color_error' : '',
-            ruleGroup: getRuleGroup(a),
-        }));
+        const dynVals = this.dynamicFieldValues;
+        const isUnassignedAE = this.activeFilter === 'Unassigned AE';
+        return this.filteredAccounts.map(a => {
+            const isActionable = ['Add', 'Remove', 'Reclassify'].includes(a.action)
+                && !this.approvedIds.has(a.id);
+            return {
+                ...a,
+                accountUrl: `/lightning/r/Account/${a.id}/view`,
+                actionClass: ACTION_CLASSES[a.action] || 'slds-badge',
+                fitScoreDisplay: a.fitScore != null ? String(a.fitScore) : '—',
+                intentDisplay: a.intent || '—',
+                stageDisplay: a.stage || '—',
+                dnnDisplay: a.isDnn ? 'Yes' : 'No',
+                aeTerritoryDisplay: a.aeTerritory || null,
+                accountExecutiveName: a.accountExecutiveName || null,
+                accountExecutiveId: a.accountExecutiveId || null,
+                hasAE: !!a.accountExecutiveName,
+                accountDevOwnerName: a.accountDevOwnerName || null,
+                hasDevOwner: !!a.accountDevOwnerName,
+                aeSearchTerm: this.aeSearchTerms[a.id] || '',
+                showAEDropdown: this.activeAEDropdownId === a.id,
+                filteredAEUsers: this._getFilteredAEUsers(a.id),
+                hasPendingAE: this.aeAssignments.hasOwnProperty(a.id),
+                isApproved: this.approvedIds.has(a.id),
+                isRejected: this.rejectedIds.has(a.id),
+                isSelected: this.selectedIds.has(a.id),
+                isActionable,
+                isSelectable: isActionable || isUnassignedAE,
+                statusLabel: this.approvedIds.has(a.id) ? 'Approved' :
+                    this.rejectedIds.has(a.id) ? 'Rejected' : 'Pending',
+                statusClass: this.approvedIds.has(a.id) ? 'slds-text-color_success' :
+                    this.rejectedIds.has(a.id) ? 'slds-text-color_error' : '',
+                ruleGroup: getRuleGroup(a),
+                showRuleGroup: a.action !== 'No Change',
+                dynamicDetails: this.dynamicDetailFields.map(f => {
+                    const accountVals = dynVals[a.id];
+                    let rawValue = accountVals ? accountVals[f.apiName] : null;
+                    if (rawValue === true) rawValue = 'Yes';
+                    else if (rawValue === false) rawValue = 'No';
+                    return {
+                        key: f.key,
+                        label: f.label,
+                        value: rawValue != null ? String(rawValue) : '—',
+                    };
+                }),
+                hasDynamicDetails: this.dynamicDetailFields.length > 0,
+            };
+        });
     }
 
     // ─── Tab handling ─────────────────────────────────────────────────────────
@@ -512,15 +583,28 @@ export default class AbxTierReview extends LightningElement {
         return ['Add', 'Remove', 'Reclassify'].includes(this.activeFilter);
     }
 
+    get isUnassignedAEFilter() {
+        return this.activeFilter === 'Unassigned AE';
+    }
+
+    get showSelectAll() {
+        return this.isActionableFilter || this.isUnassignedAEFilter;
+    }
+
     get actionableRows() {
         return this.filteredAccounts.filter(a =>
             ['Add', 'Remove', 'Reclassify'].includes(a.action) && !this.approvedIds.has(a.id)
         );
     }
 
+    get selectableRows() {
+        if (this.isUnassignedAEFilter) return this.filteredAccounts;
+        return this.actionableRows;
+    }
+
     get selectedCount() {
         return [...this.selectedIds].filter(id =>
-            this.actionableRows.some(a => a.id === id)
+            this.selectableRows.some(a => a.id === id)
         ).length;
     }
 
@@ -529,7 +613,7 @@ export default class AbxTierReview extends LightningElement {
     }
 
     get allSelected() {
-        const rows = this.actionableRows;
+        const rows = this.selectableRows;
         return rows.length > 0 && rows.every(a => this.selectedIds.has(a.id));
     }
 
@@ -545,7 +629,7 @@ export default class AbxTierReview extends LightningElement {
         if (this.allSelected) {
             this.selectedIds = new Set();
         } else {
-            this.selectedIds = new Set(this.actionableRows.map(a => a.id));
+            this.selectedIds = new Set(this.selectableRows.map(a => a.id));
         }
     }
 
@@ -639,6 +723,11 @@ export default class AbxTierReview extends LightningElement {
         this.activeAEDropdownId = null;
         this.bulkAEPickerOpen = false;
         this.bulkAESearchTerm = '';
+        this.dynamicFilterFields = [];
+        this.dynamicDetailFields = [];
+        this.dynamicFieldValues = {};
+        this.showDynamicFieldPicker = false;
+        this.showDetailFieldPicker = false;
     }
 
     // ─── Refresh ──────────────────────────────────────────────────────────────
@@ -819,6 +908,124 @@ export default class AbxTierReview extends LightningElement {
         }
     }
 
+    // ─── Dynamic Field Pickers ────────────────────────────────────────────────
+
+    get filteredFieldDescribe() {
+        const existingFields = new Set([
+            ...FIELD_CONFIGS.map(c => c.field).filter(Boolean),
+            ...this.dynamicFilterFields.map(f => f.apiName),
+        ]);
+        let fields = this.accountFieldDescribe.filter(f => !existingFields.has(f.apiName));
+        if (this.dynamicFieldSearchTerm) {
+            const q = this.dynamicFieldSearchTerm.toLowerCase();
+            fields = fields.filter(f =>
+                f.label.toLowerCase().includes(q) || f.apiName.toLowerCase().includes(q)
+            );
+        }
+        return fields.slice(0, 30);
+    }
+
+    get filteredDetailFieldDescribe() {
+        const existing = new Set(this.dynamicDetailFields.map(f => f.apiName));
+        let fields = this.accountFieldDescribe.filter(f => !existing.has(f.apiName));
+        if (this.detailFieldSearchTerm) {
+            const q = this.detailFieldSearchTerm.toLowerCase();
+            fields = fields.filter(f =>
+                f.label.toLowerCase().includes(q) || f.apiName.toLowerCase().includes(q)
+            );
+        }
+        return fields.slice(0, 30);
+    }
+
+    handleToggleDynamicFieldPicker() {
+        this.showDynamicFieldPicker = !this.showDynamicFieldPicker;
+        this.dynamicFieldSearchTerm = '';
+    }
+
+    handleDynamicFieldSearch(event) {
+        this.dynamicFieldSearchTerm = event.target.value;
+    }
+
+    async handleAddDynamicFilter(event) {
+        const apiName = event.currentTarget.dataset.apiName;
+        const field = this.accountFieldDescribe.find(f => f.apiName === apiName);
+        if (!field) return;
+
+        this.dynamicFilterFields = [
+            ...this.dynamicFilterFields,
+            { apiName: field.apiName, label: field.label, type: field.type, key: `dyn_${field.apiName}` }
+        ];
+        this.showDynamicFieldPicker = false;
+        this.dynamicFieldSearchTerm = '';
+        this.activeFilterCategory = `dyn_${field.apiName}`;
+
+        await this._fetchDynamicFieldValues();
+    }
+
+    handleRemoveDynamicFilter(event) {
+        event.stopPropagation();
+        const key = event.currentTarget.dataset.key;
+        this.dynamicFilterFields = this.dynamicFilterFields.filter(f => f.key !== key);
+        const newFilters = { ...this.fieldFilters };
+        delete newFilters[key];
+        this.fieldFilters = newFilters;
+        if (this.activeFilterCategory === key && this.filterCategories.length > 0) {
+            this.activeFilterCategory = this.filterCategories[0].key;
+        }
+    }
+
+    handleToggleDetailFieldPicker() {
+        this.showDetailFieldPicker = !this.showDetailFieldPicker;
+        this.detailFieldSearchTerm = '';
+    }
+
+    handleDetailFieldSearch(event) {
+        this.detailFieldSearchTerm = event.target.value;
+    }
+
+    async handleAddDetailField(event) {
+        const apiName = event.currentTarget.dataset.apiName;
+        const field = this.accountFieldDescribe.find(f => f.apiName === apiName);
+        if (!field) return;
+
+        this.dynamicDetailFields = [
+            ...this.dynamicDetailFields,
+            { apiName: field.apiName, label: field.label, type: field.type, key: `det_${field.apiName}` }
+        ];
+        this.showDetailFieldPicker = false;
+        this.detailFieldSearchTerm = '';
+
+        await this._fetchDynamicFieldValues();
+    }
+
+    handleRemoveDetailField(event) {
+        event.stopPropagation();
+        const key = event.currentTarget.dataset.key;
+        this.dynamicDetailFields = this.dynamicDetailFields.filter(f => f.key !== key);
+    }
+
+    async _fetchDynamicFieldValues() {
+        const filterFieldNames = this.dynamicFilterFields.map(f => f.apiName);
+        const detailFieldNames = this.dynamicDetailFields.map(f => f.apiName);
+        const allFieldNames = [...new Set([...filterFieldNames, ...detailFieldNames])];
+        const accountIds = this.allAccounts.map(a => a.id);
+
+        if (!accountIds.length || !allFieldNames.length) return;
+
+        this.isDynamicFieldsLoading = true;
+        try {
+            const result = await getDynamicFieldValues({
+                fieldNames: allFieldNames,
+                accountIds,
+            });
+            this.dynamicFieldValues = result;
+        } catch (error) {
+            this.showToast('Error', 'Failed to load field data: ' + this.reduceErrors(error), 'error');
+        } finally {
+            this.isDynamicFieldsLoading = false;
+        }
+    }
+
     // Close filter panel, AE dropdown, and bulk picker when clicking outside
     handleBodyClick(event) {
         const path = event.composedPath();
@@ -847,6 +1054,24 @@ export default class AbxTierReview extends LightningElement {
             const clickedBulk = (bulkPanel && path.includes(bulkPanel)) || (bulkBtn && path.includes(bulkBtn));
             if (!clickedBulk) {
                 this.bulkAEPickerOpen = false;
+            }
+        }
+
+        if (this.showDynamicFieldPicker) {
+            const dynPicker = this.template.querySelector('.dynamic-field-picker');
+            const addBtn = this.template.querySelector('.filter-cat--add');
+            const clickedDyn = (dynPicker && path.includes(dynPicker)) || (addBtn && path.includes(addBtn));
+            if (!clickedDyn) {
+                this.showDynamicFieldPicker = false;
+            }
+        }
+
+        if (this.showDetailFieldPicker) {
+            const detPicker = this.template.querySelector('.detail-field-picker');
+            const detBtn = this.template.querySelector('.detail-add-field-btn');
+            const clickedDet = (detPicker && path.includes(detPicker)) || (detBtn && path.includes(detBtn));
+            if (!clickedDet) {
+                this.showDetailFieldPicker = false;
             }
         }
     }

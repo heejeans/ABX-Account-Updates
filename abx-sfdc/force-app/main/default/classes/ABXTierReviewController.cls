@@ -8,6 +8,8 @@
  *  - syncCampaignMembership(json)→ Insert / delete CampaignMember records
  *  - getAEUsers()                → Active Users for AE assignment picker
  *  - assignAccountExecutives(json)→ Update Account_Executive_Owner__c on Accounts
+ *  - getAccountFieldDescribe()   → Schema describe for dynamic field lookup
+ *  - getDynamicFieldValues(...)   → Fetch arbitrary field values for accounts
  */
 public with sharing class ABXTierReviewController {
 
@@ -22,7 +24,8 @@ public with sharing class ABXTierReviewController {
         'Consulting_IT_Filter_Flow__c, Company_isDefunct__c, ' +
         'Qualified_Out_Detail__c, Qualified_Out_Date__c, Qualified_Out_Reason__c, ' +
         'ParentId, Entered_Closed_Lost_Date__c, ' +
-        'AE_Territory__c, Account_Executive_Owner__c, Account_Executive_Owner__r.Name';
+        'AE_Territory__c, Account_Executive_Owner__c, Account_Executive_Owner__r.Name, ' +
+        'Account_Development_Owner__c, Account_Development_Owner__r.Name';
 
     // ─── Wrapper classes ──────────────────────────────────────────────────────────
 
@@ -47,6 +50,8 @@ public with sharing class ABXTierReviewController {
         @AuraEnabled public String aeTerritory;
         @AuraEnabled public String accountExecutiveId;
         @AuraEnabled public String accountExecutiveName;
+        @AuraEnabled public String accountDevOwnerId;
+        @AuraEnabled public String accountDevOwnerName;
     }
 
     public class ReviewData {
@@ -73,6 +78,12 @@ public with sharing class ABXTierReviewController {
         @AuraEnabled public String accountId;
         @AuraEnabled public String action;    // Add, Remove, Reclassify
         @AuraEnabled public String tier;      // Tier 1, Tier 2, Tier 3, or null
+    }
+
+    public class FieldDescribeResult {
+        @AuraEnabled public String apiName;
+        @AuraEnabled public String label;
+        @AuraEnabled public String type;
     }
 
     public class AEUserOption {
@@ -160,6 +171,10 @@ public with sharing class ABXTierReviewController {
             w.accountExecutiveId   = acct.Account_Executive_Owner__c;
             w.accountExecutiveName = acct.Account_Executive_Owner__r != null
                                        ? acct.Account_Executive_Owner__r.Name
+                                       : null;
+            w.accountDevOwnerId    = acct.Account_Development_Owner__c;
+            w.accountDevOwnerName  = acct.Account_Development_Owner__r != null
+                                       ? acct.Account_Development_Owner__r.Name
                                        : null;
             wrappers.add(w);
         }
@@ -467,6 +482,104 @@ public with sharing class ABXTierReviewController {
         result.removed = 0;
         result.updated = updated;
         result.errors  = errors;
+        return result;
+    }
+
+    // ─── Dynamic Field Describe ─────────────────────────────────────────────────
+
+    /**
+     * Returns field metadata for all accessible Account fields.
+     * Used by the LWC to build a searchable field picker for dynamic filters/details.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<FieldDescribeResult> getAccountFieldDescribe() {
+        List<FieldDescribeResult> results = new List<FieldDescribeResult>();
+        Map<String, Schema.SObjectField> fieldMap = Schema.SObjectType.Account.fields.getMap();
+
+        for (String fieldName : fieldMap.keySet()) {
+            Schema.DescribeFieldResult dfr = fieldMap.get(fieldName).getDescribe();
+            if (!dfr.isAccessible()) continue;
+
+            FieldDescribeResult fdr = new FieldDescribeResult();
+            fdr.apiName = dfr.getName();
+            fdr.label   = dfr.getLabel();
+            fdr.type    = String.valueOf(dfr.getType());
+            results.add(fdr);
+        }
+
+        return results;
+    }
+
+    // ─── Dynamic Field Values ───────────────────────────────────────────────────
+
+    /**
+     * Fetch arbitrary field values for a set of Accounts.
+     * Field names are validated against the Account describe to prevent SOQL injection.
+     * Reference/lookup fields auto-resolve to the related record's Name.
+     */
+    @AuraEnabled
+    public static Map<Id, Map<String, Object>> getDynamicFieldValues(
+        List<String> fieldNames, List<Id> accountIds
+    ) {
+        if (fieldNames == null || fieldNames.isEmpty() || accountIds == null || accountIds.isEmpty()) {
+            return new Map<Id, Map<String, Object>>();
+        }
+
+        Map<String, Schema.SObjectField> fieldMap = Schema.SObjectType.Account.fields.getMap();
+        List<String> validFields = new List<String>();
+
+        for (String f : fieldNames) {
+            String lower = f.toLowerCase();
+            if (fieldMap.containsKey(lower) && fieldMap.get(lower).getDescribe().isAccessible()) {
+                validFields.add(fieldMap.get(lower).getDescribe().getName());
+            }
+        }
+
+        if (validFields.isEmpty()) {
+            return new Map<Id, Map<String, Object>>();
+        }
+
+        // Build query fields — for lookups, also fetch the relationship Name
+        Set<String> queryFields = new Set<String>{ 'Id' };
+        for (String f : validFields) {
+            queryFields.add(f);
+            Schema.DescribeFieldResult dfr = fieldMap.get(f.toLowerCase()).getDescribe();
+            if (dfr.getType() == Schema.DisplayType.REFERENCE) {
+                String relName = dfr.getRelationshipName();
+                if (relName != null) {
+                    queryFields.add(relName + '.Name');
+                }
+            }
+        }
+
+        String soql = 'SELECT ' + String.join(new List<String>(queryFields), ', ') +
+                       ' FROM Account WHERE Id IN :accountIds';
+        List<Account> accounts = Database.query(soql);
+
+        Map<Id, Map<String, Object>> result = new Map<Id, Map<String, Object>>();
+        for (Account acct : accounts) {
+            Map<String, Object> values = new Map<String, Object>();
+            for (String f : validFields) {
+                Schema.DescribeFieldResult dfr = fieldMap.get(f.toLowerCase()).getDescribe();
+                if (dfr.getType() == Schema.DisplayType.REFERENCE) {
+                    String relName = dfr.getRelationshipName();
+                    if (relName != null) {
+                        try {
+                            SObject related = acct.getSObject(relName);
+                            values.put(f, related != null ? (Object) related.get('Name') : null);
+                        } catch (Exception e) {
+                            values.put(f, acct.get(f));
+                        }
+                    } else {
+                        values.put(f, acct.get(f));
+                    }
+                } else {
+                    values.put(f, acct.get(f));
+                }
+            }
+            result.put(acct.Id, values);
+        }
+
         return result;
     }
 }

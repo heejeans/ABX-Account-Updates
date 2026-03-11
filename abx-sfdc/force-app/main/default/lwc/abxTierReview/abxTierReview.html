@@ -91,7 +91,7 @@
                     <!-- Toolbar: search, field filters, bulk actions -->
                     <div class="slds-grid slds-grid_align-spread slds-p-horizontal_medium slds-m-bottom_x-small toolbar">
                         <div class="slds-col slds-grid slds-grid_vertical-align-center">
-                            <template if:true={isActionableFilter}>
+                            <template if:true={showSelectAll}>
                                 <lightning-input
                                     type="checkbox"
                                     variant="label-hidden"
@@ -105,18 +105,20 @@
                                 Showing {filteredCount} accounts
                             </span>
                             <template if:true={hasSelection}>
-                                <lightning-button-group class="slds-m-left_x-small">
-                                    <lightning-button
-                                        label="Approve Selected"
-                                        variant="success"
-                                        onclick={handleApproveSelected}
-                                    ></lightning-button>
-                                    <lightning-button
-                                        label="Reject Selected"
-                                        variant="destructive"
-                                        onclick={handleRejectSelected}
-                                    ></lightning-button>
-                                </lightning-button-group>
+                                <template if:true={isActionableFilter}>
+                                    <lightning-button-group class="slds-m-left_x-small">
+                                        <lightning-button
+                                            label="Approve Selected"
+                                            variant="success"
+                                            onclick={handleApproveSelected}
+                                        ></lightning-button>
+                                        <lightning-button
+                                            label="Reject Selected"
+                                            variant="destructive"
+                                            onclick={handleRejectSelected}
+                                        ></lightning-button>
+                                    </lightning-button-group>
+                                </template>
                                 <!-- Bulk AE Assignment -->
                                 <div class="slds-is-relative slds-m-left_x-small">
                                     <lightning-button
@@ -191,6 +193,37 @@
                                                         <template if:true={cat.hasSelections}>
                                                             <span class="filter-cat__dot"></span>
                                                         </template>
+                                                        <template if:true={cat.isDynamic}>
+                                                            <span class="filter-cat__remove" data-key={cat.key} onclick={handleRemoveDynamicFilter}>&times;</span>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <!-- Add dynamic field button -->
+                                                <div class="filter-cat filter-cat--add" onclick={handleToggleDynamicFieldPicker}>
+                                                    + Add Field
+                                                </div>
+                                                <template if:true={showDynamicFieldPicker}>
+                                                    <div class="dynamic-field-picker">
+                                                        <input
+                                                            type="text"
+                                                            class="slds-input slds-m-bottom_xx-small"
+                                                            placeholder="Search fields…"
+                                                            value={dynamicFieldSearchTerm}
+                                                            oninput={handleDynamicFieldSearch}
+                                                        />
+                                                        <div class="dynamic-field-picker__list">
+                                                            <template for:each={filteredFieldDescribe} for:item="fd">
+                                                                <div
+                                                                    key={fd.apiName}
+                                                                    class="dynamic-field-item"
+                                                                    data-api-name={fd.apiName}
+                                                                    onclick={handleAddDynamicFilter}
+                                                                >
+                                                                    <span class="dynamic-field-item__label">{fd.label}</span>
+                                                                    <span class="dynamic-field-item__api">{fd.apiName}</span>
+                                                                </div>
+                                                            </template>
+                                                        </div>
                                                     </div>
                                                 </template>
                                             </div>
@@ -231,8 +264,8 @@
                         <template for:each={datatableRows} for:item="row">
                             <div key={row.id} class="slds-box slds-m-bottom_xx-small account-card">
                                 <div class="slds-grid slds-grid_vertical-align-center">
-                                    <!-- Checkbox (actionable only) -->
-                                    <template if:true={row.isActionable}>
+                                    <!-- Checkbox (selectable rows: actionable or Unassigned AE) -->
+                                    <template if:true={row.isSelectable}>
                                         <lightning-input
                                             type="checkbox"
                                             variant="label-hidden"
@@ -329,13 +362,53 @@
                                 <!-- Expandable detail -->
                                 <div data-detail-id={row.id} class="slds-hide slds-m-top_x-small slds-p-top_x-small slds-border_top">
                                     <p class="slds-text-body_small"><strong>Reason:</strong> {row.reason}</p>
-                                    <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Rule group:</strong> {row.ruleGroup}</p>
+                                    <template if:true={row.showRuleGroup}>
+                                        <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Rule group:</strong> {row.ruleGroup}</p>
+                                    </template>
                                     <template if:true={row.segment}>
                                         <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Segment:</strong> {row.segment}</p>
                                     </template>
-                                    <template if:true={row.closedLostDate}>
-                                        <p class="slds-text-body_small slds-m-top_xxx-small"><strong>CL Date:</strong> {row.closedLostDate}</p>
+                                    <template if:true={row.hasDevOwner}>
+                                        <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Account Dev Owner:</strong> {row.accountDevOwnerName}</p>
                                     </template>
+
+                                    <!-- Dynamic Detail Fields -->
+                                    <template if:true={row.hasDynamicDetails}>
+                                        <template for:each={row.dynamicDetails} for:item="dd">
+                                            <p key={dd.key} class="slds-text-body_small slds-m-top_xxx-small">
+                                                <strong>{dd.label}:</strong> {dd.value}
+                                                <span class="dynamic-detail-remove" data-key={dd.key} onclick={handleRemoveDetailField}>&times;</span>
+                                            </p>
+                                        </template>
+                                    </template>
+                                    <!-- Add Detail Field button -->
+                                    <div class="slds-m-top_xx-small slds-is-relative">
+                                        <span class="detail-add-field-btn" onclick={handleToggleDetailFieldPicker}>+ Add Field</span>
+                                        <template if:true={showDetailFieldPicker}>
+                                            <div class="detail-field-picker">
+                                                <input
+                                                    type="text"
+                                                    class="slds-input slds-m-bottom_xx-small"
+                                                    placeholder="Search fields…"
+                                                    value={detailFieldSearchTerm}
+                                                    oninput={handleDetailFieldSearch}
+                                                />
+                                                <div class="detail-field-picker__list">
+                                                    <template for:each={filteredDetailFieldDescribe} for:item="dfd">
+                                                        <div
+                                                            key={dfd.apiName}
+                                                            class="dynamic-field-item"
+                                                            data-api-name={dfd.apiName}
+                                                            onclick={handleAddDetailField}
+                                                        >
+                                                            <span class="dynamic-field-item__label">{dfd.label}</span>
+                                                            <span class="dynamic-field-item__api">{dfd.apiName}</span>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
 
                                     <!-- AE Assignment -->
                                     <div class="ae-assignment-section">
