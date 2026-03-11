@@ -1,0 +1,24 @@
+<template>
+    <div class="stats-bar slds-grid slds-grid_align-center slds-p-vertical_x-small slds-p-horizontal_medium">
+        <template for:each={cards} for:item="card">
+            <div
+                key={card.key}
+                class={card.cardClass}
+                data-filter={card.key}
+                onclick={handleCardClick}
+            >
+                <div class="stat-card__value">{card.value}</div>
+                <div class="stat-card__label">{card.label}</div>
+            </div>
+        </template>
+
+        <!-- Net change indicator -->
+        <div class="stat-summary slds-m-left_small">
+            <div class={netChangeClass}>{netChangeLabel}</div>
+            <div class="stat-summary__label">Net change</div>
+            <template if:true={hasApproved}>
+                <div class="stat-summary__approved">{approvedLabel}</div>
+            </template>
+        </div>
+    </div>
+</template>

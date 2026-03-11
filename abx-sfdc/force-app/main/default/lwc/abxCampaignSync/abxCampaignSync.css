@@ -1,0 +1,212 @@
+:host {
+    display: block;
+}
+
+/* ── Campaign header with link ─────────────────────────────────────── */
+
+.campaign-header {
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 4px;
+}
+
+.campaign-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.campaign-link {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.campaign-link:hover {
+    color: #1d4ed8;
+}
+
+/* ── Stat Cards (same as abxStatsBar) ─────────────────────────────── */
+
+.stats-bar {
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.stat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px;
+    padding: 10px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: #fff;
+}
+
+.stat-card:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+}
+
+.stat-card--active {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+.stat-card--add .stat-card__value {
+    color: #16a34a;
+}
+
+.stat-card--remove .stat-card__value {
+    color: #dc2626;
+}
+
+.stat-card__value {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-card__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+/* ── Account Cards (same as Review tab) ───────────────────────────── */
+
+.account-card {
+    padding: 10px 14px;
+    border-radius: 6px;
+    transition: background 0.1s;
+}
+
+.account-card:hover {
+    background-color: #f3f4f6;
+}
+
+.account-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.meta-row span {
+    white-space: nowrap;
+}
+
+.toolbar {
+    min-height: 36px;
+}
+
+.search-input {
+    max-width: 260px;
+}
+
+/* ── Field Filter Panel (same as Review tab) ──────────────────────── */
+
+.filter-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 200;
+    width: 420px;
+    max-height: 360px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+    border-radius: 8px;
+    margin-top: 4px;
+    overflow: hidden;
+}
+
+.filter-panel__inner {
+    height: 100%;
+}
+
+.filter-panel__cats {
+    width: 140px;
+    min-width: 140px;
+    border-right: 1px solid #e5e7eb;
+    padding: 8px 0;
+    overflow-y: auto;
+    max-height: 340px;
+}
+
+.filter-cat {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    position: relative;
+    color: #374151;
+    transition: background 0.1s;
+}
+
+.filter-cat:hover {
+    background: #f3f4f6;
+}
+
+.filter-cat--active {
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.filter-cat__dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: #2563eb;
+    border-radius: 50%;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.filter-panel__vals {
+    flex: 1;
+    padding: 8px 12px;
+    overflow-y: auto;
+    max-height: 340px;
+}
+
+.filter-value {
+    display: flex;
+    align-items: center;
+    padding: 5px 4px;
+    font-size: 13px;
+    cursor: pointer;
+    gap: 6px;
+}
+
+.filter-value:hover {
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.filter-value input[type="checkbox"] {
+    accent-color: #2563eb;
+}
+
+.filter-value__label {
+    flex: 1;
+    color: #374151;
+}
+
+.filter-value__count {
+    color: #9ca3af;
+    font-size: 12px;
+}
+
+/* ── AE Unassigned Badge ─────────────────────────────────────────── */
+
+.ae-unassigned-badge {
+    color: #dc2626;
+    font-weight: 600;
+    background: #fef2f2;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid #fecaca;
+    font-size: 12px;
+}

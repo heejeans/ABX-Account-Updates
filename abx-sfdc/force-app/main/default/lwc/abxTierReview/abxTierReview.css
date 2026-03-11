@@ -1,0 +1,220 @@
+:host {
+    display: block;
+}
+
+.abx-tier-review {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.account-card {
+    padding: 10px 14px;
+    border-radius: 6px;
+    transition: background 0.1s;
+}
+
+.account-card:hover {
+    background-color: #f3f4f6;
+}
+
+.account-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.meta-row span {
+    white-space: nowrap;
+}
+
+.toolbar {
+    min-height: 36px;
+}
+
+.search-input {
+    max-width: 260px;
+}
+
+.reason-pills span {
+    cursor: pointer;
+    margin-right: 6px;
+    margin-bottom: 4px;
+    display: inline-block;
+}
+
+/* ── Field Filter Panel ───────────────────────────────────────────────── */
+
+.filter-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 200;
+    width: 420px;
+    max-height: 360px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+    border-radius: 8px;
+    margin-top: 4px;
+    overflow: hidden;
+}
+
+.filter-panel__inner {
+    height: 100%;
+}
+
+.filter-panel__cats {
+    width: 140px;
+    min-width: 140px;
+    border-right: 1px solid #e5e7eb;
+    padding: 8px 0;
+    overflow-y: auto;
+    max-height: 340px;
+}
+
+.filter-cat {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    position: relative;
+    color: #374151;
+    transition: background 0.1s;
+}
+
+.filter-cat:hover {
+    background: #f3f4f6;
+}
+
+.filter-cat--active {
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.filter-cat__dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: #2563eb;
+    border-radius: 50%;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.filter-panel__vals {
+    flex: 1;
+    padding: 8px 12px;
+    overflow-y: auto;
+    max-height: 340px;
+}
+
+.filter-value {
+    display: flex;
+    align-items: center;
+    padding: 5px 4px;
+    font-size: 13px;
+    cursor: pointer;
+    gap: 6px;
+}
+
+.filter-value:hover {
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.filter-value input[type="checkbox"] {
+    accent-color: #2563eb;
+}
+
+.filter-value__label {
+    flex: 1;
+    color: #374151;
+}
+
+.filter-value__count {
+    color: #9ca3af;
+    font-size: 12px;
+}
+
+/* ── AE Unassigned Badge ─────────────────────────────────────────── */
+
+.ae-unassigned-badge {
+    color: #dc2626;
+    font-weight: 600;
+    background: #fef2f2;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid #fecaca;
+    font-size: 12px;
+}
+
+/* ── AE Assignment Section ───────────────────────────────────────── */
+
+.ae-assignment-section {
+    padding-top: 8px;
+    border-top: 1px dashed #e5e7eb;
+    margin-top: 8px;
+}
+
+.ae-combobox-wrapper {
+    position: relative;
+    width: 260px;
+}
+
+.ae-search-input {
+    font-size: 13px;
+}
+
+.ae-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 300;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 2px;
+}
+
+.ae-dropdown-item {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #374151;
+}
+
+.ae-dropdown-item:hover {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.ae-dropdown-empty {
+    color: #9ca3af;
+    font-style: italic;
+    cursor: default;
+}
+
+.ae-dropdown-empty:hover {
+    background: transparent;
+    color: #9ca3af;
+}
+
+/* ── Bulk AE Picker Panel ────────────────────────────────────────── */
+
+.ae-bulk-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 200;
+    width: 300px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+    border-radius: 8px;
+    margin-top: 4px;
+    padding: 12px;
+}
+
+.ae-bulk-list {
+    max-height: 240px;
+    overflow-y: auto;
+}

@@ -1,0 +1,243 @@
+<template>
+    <div class="campaign-sync">
+
+        <!-- Campaign title row with link -->
+        <template if:true={hasCampaignData}>
+            <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center slds-p-horizontal_medium slds-p-vertical_x-small campaign-header">
+                <div class="slds-grid slds-grid_vertical-align-center">
+                    <span class="campaign-title">{campaignName}</span>
+                    <a href={campaignUrl} class="campaign-link slds-m-left_x-small" target="_blank" rel="noopener">
+                        <lightning-icon icon-name="utility:new_window" size="xx-small" alternative-text="Open campaign"></lightning-icon>
+                    </a>
+                </div>
+                <template if:true={hasCpApproved}>
+                    <lightning-button
+                        variant="brand"
+                        label={syncButtonLabel}
+                        icon-name="utility:sync"
+                        onclick={handleSync}
+                    ></lightning-button>
+                </template>
+            </div>
+        </template>
+
+        <!-- Stat Cards (same visual as Review tab) -->
+        <div class="stats-bar slds-grid slds-grid_align-center slds-p-vertical_x-small slds-p-horizontal_medium">
+            <template for:each={statCards} for:item="card">
+                <div
+                    key={card.key}
+                    class={card.cardClass}
+                    data-filter={card.key}
+                    onclick={handleCardClick}
+                >
+                    <div class="stat-card__value">{card.value}</div>
+                    <div class="stat-card__label">{card.label}</div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Toolbar: search, field filters, bulk actions -->
+        <div class="slds-grid slds-grid_align-spread slds-p-horizontal_medium slds-m-bottom_x-small toolbar">
+            <div class="slds-col slds-grid slds-grid_vertical-align-center">
+                <template if:true={isActionableView}>
+                    <lightning-input
+                        type="checkbox"
+                        variant="label-hidden"
+                        label="Select all"
+                        checked={allSelected}
+                        onchange={handleSelectAll}
+                        class="slds-m-right_x-small"
+                    ></lightning-input>
+                </template>
+                <span class="slds-text-body_small slds-text-color_weak slds-m-right_small">
+                    Showing {filteredCount} accounts
+                </span>
+                <template if:true={hasSelection}>
+                    <lightning-button-group class="slds-m-left_x-small">
+                        <lightning-button
+                            label="Approve Selected"
+                            variant="success"
+                            onclick={handleApproveSelected}
+                        ></lightning-button>
+                        <lightning-button
+                            label="Reject Selected"
+                            variant="destructive"
+                            onclick={handleRejectSelected}
+                        ></lightning-button>
+                    </lightning-button-group>
+                </template>
+            </div>
+            <div class="slds-col slds-grid slds-grid_vertical-align-center">
+                <!-- Field Filter button -->
+                <div class="slds-is-relative slds-m-right_x-small">
+                    <lightning-button
+                        label={filterButtonLabel}
+                        icon-name="utility:filterList"
+                        variant={filterButtonVariant}
+                        onclick={handleToggleFilterPanel}
+                        class="filter-toggle-btn"
+                    ></lightning-button>
+                    <template if:true={hasActiveFieldFilters}>
+                        <lightning-button
+                            label="Clear"
+                            variant="base"
+                            onclick={handleClearFieldFilters}
+                            class="slds-m-left_xx-small"
+                        ></lightning-button>
+                    </template>
+
+                    <!-- Filter dropdown panel -->
+                    <template if:true={filterPanelOpen}>
+                        <div class="filter-panel slds-box slds-theme_default">
+                            <div class="filter-panel__inner slds-grid">
+                                <!-- Left: categories -->
+                                <div class="filter-panel__cats">
+                                    <template for:each={filterCategories} for:item="cat">
+                                        <div
+                                            key={cat.key}
+                                            class={cat.catClass}
+                                            data-key={cat.key}
+                                            onclick={handleFilterCategoryClick}
+                                        >
+                                            {cat.label}
+                                            <template if:true={cat.hasSelections}>
+                                                <span class="filter-cat__dot"></span>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                                <!-- Right: values -->
+                                <div class="filter-panel__vals">
+                                    <template for:each={activeFilterValues} for:item="fv">
+                                        <label key={fv.value} class="filter-value">
+                                            <input
+                                                type="checkbox"
+                                                checked={fv.checked}
+                                                data-value={fv.value}
+                                                onchange={handleFilterValueToggle}
+                                            />
+                                            <span class="filter-value__label">{fv.label}</span>
+                                            <span class="filter-value__count">({fv.count})</span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <lightning-input
+                    type="search"
+                    placeholder="Search by account name…"
+                    value={searchTerm}
+                    onchange={handleSearchChange}
+                    variant="label-hidden"
+                    label="Search"
+                    class="search-input"
+                ></lightning-input>
+            </div>
+        </div>
+
+        <!-- Account cards (same layout as Review tab) -->
+        <div class="slds-p-horizontal_medium account-list">
+            <template for:each={displayRows} for:item="row">
+                <div key={row.id} class="slds-box slds-m-bottom_xx-small account-card">
+                    <div class="slds-grid slds-grid_vertical-align-center">
+                        <!-- Checkbox -->
+                        <template if:true={row.isActionable}>
+                            <lightning-input
+                                type="checkbox"
+                                variant="label-hidden"
+                                label="Select"
+                                checked={row.isSelected}
+                                data-id={row.id}
+                                onchange={handleToggleSelect}
+                                class="slds-m-right_x-small"
+                            ></lightning-input>
+                        </template>
+
+                        <!-- Account info -->
+                        <div class="slds-col slds-grow">
+                            <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xxx-small">
+                                <a href={row.accountUrl} class="slds-text-link slds-m-right_x-small account-name">
+                                    {row.name}
+                                </a>
+                                <span class={row.syncBadgeClass}>{row.syncLabel}</span>
+                                <template if:true={row.isCpApproved}>
+                                    <span class="slds-badge slds-theme_success slds-m-left_xx-small">✓ Approved</span>
+                                </template>
+                                <template if:true={row.isCpRejected}>
+                                    <span class="slds-badge slds-theme_error slds-m-left_xx-small">✕ Rejected</span>
+                                </template>
+                            </div>
+                            <div class="slds-text-body_small slds-text-color_weak meta-row">
+                                <span>Fit: {row.fitScoreDisplay}</span>
+                                <span class="slds-m-left_small">Intent: {row.intentDisplay}</span>
+                                <span class="slds-m-left_small">Stage: {row.stageDisplay}</span>
+                                <span class="slds-m-left_small">DNN: {row.dnnDisplay}</span>
+                                <template if:true={row.effectiveTier}>
+                                    <span class="slds-m-left_small">Tier: {row.effectiveTier}</span>
+                                </template>
+                                <template if:true={row.aeTerritoryDisplay}>
+                                    <span class="slds-m-left_small">Territory: {row.aeTerritoryDisplay}</span>
+                                </template>
+                                <template if:true={row.hasAE}>
+                                    <span class="slds-m-left_small">AE: {row.accountExecutiveName}</span>
+                                </template>
+                                <template if:false={row.hasAE}>
+                                    <span class="slds-m-left_small ae-unassigned-badge">No AE</span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="slds-col slds-no-flex slds-grid slds-grid_vertical-align-center">
+                            <template if:true={row.isActionable}>
+                                <lightning-button-group>
+                                    <lightning-button
+                                        label="Approve"
+                                        variant="success"
+                                        data-id={row.id}
+                                        onclick={handleApprove}
+                                    ></lightning-button>
+                                    <lightning-button
+                                        label="Reject"
+                                        variant="destructive"
+                                        data-id={row.id}
+                                        onclick={handleReject}
+                                    ></lightning-button>
+                                </lightning-button-group>
+                            </template>
+                            <lightning-button-icon
+                                icon-name="utility:chevrondown"
+                                alternative-text="Details"
+                                variant="border-filled"
+                                class="slds-m-left_xx-small"
+                                data-id={row.id}
+                                onclick={handleToggleExpand}
+                            ></lightning-button-icon>
+                        </div>
+                    </div>
+
+                    <!-- Expandable detail -->
+                    <div data-detail-id={row.id} class="slds-hide slds-m-top_x-small slds-p-top_x-small slds-border_top">
+                        <p class="slds-text-body_small">
+                            <strong>Campaign action:</strong> {row.syncDescription}
+                        </p>
+                        <template if:true={row.reason}>
+                            <p class="slds-text-body_small slds-m-top_xxx-small">
+                                <strong>ABX review note:</strong> {row.reason}
+                            </p>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <template if:false={filteredCount}>
+                <div class="slds-align_absolute-center slds-p-around_large slds-text-color_weak">
+                    No accounts match the current filters.
+                </div>
+            </template>
+        </div>
+    </div>
+</template>

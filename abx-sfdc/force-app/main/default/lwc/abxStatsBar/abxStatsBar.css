@@ -1,0 +1,96 @@
+.stats-bar {
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.stat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px;
+    padding: 10px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: #fff;
+}
+
+.stat-card:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+}
+
+.stat-card--active {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+.stat-card--add .stat-card__value {
+    color: #16a34a;
+}
+
+.stat-card--remove .stat-card__value {
+    color: #dc2626;
+}
+
+.stat-card--reclassify .stat-card__value {
+    color: #d97706;
+}
+
+.stat-card--warn .stat-card__value {
+    color: #d97706;
+}
+
+.stat-card__value {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-card__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.stat-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 80px;
+    padding: 8px 12px;
+}
+
+.net-change {
+    font-size: 18px;
+    font-weight: 700;
+    color: #6b7280;
+}
+
+.net-change--positive {
+    color: #16a34a;
+}
+
+.net-change--negative {
+    color: #dc2626;
+}
+
+.stat-summary__label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #9ca3af;
+}
+
+.stat-summary__approved {
+    font-size: 11px;
+    color: #2563eb;
+    font-weight: 600;
+    margin-top: 2px;
+}
