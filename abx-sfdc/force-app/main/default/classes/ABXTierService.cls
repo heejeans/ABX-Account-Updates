@@ -185,8 +185,8 @@ public class ABXTierService {
         if (acct.Account_Stage__c != null && EXCLUDE_STAGES.contains(acct.Account_Stage__c)) {
             reasons.add('Account stage "' + acct.Account_Stage__c + '" is excluded from tiering');
         }
-        if (acct.Sales_Segment__c == 'Commercial') {
-            reasons.add('Sales segment is Commercial (excluded from ABX targeting)');
+        if (acct.Sales_Segment__c == 'Commercial' || acct.Sales_Segment__c == 'Mid-Market') {
+            reasons.add('Sales segment is ' + acct.Sales_Segment__c + ' (excluded from ABX targeting)');
         }
 
         return reasons;

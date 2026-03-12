@@ -142,6 +142,17 @@ private class ABXTierServiceTest {
         System.assert(eval.reason.contains('Commercial'), 'Reason should mention Commercial');
     }
 
+    @isTest
+    static void testExclusion_MidMarketSegment() {
+        Account a = buildAccount(new Map<String, Object>{
+            'Sales_Segment__c' => 'Mid-Market'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Ignore', eval.action);
+        System.assert(eval.reason.contains('Mid-Market'), 'Reason should mention Mid-Market');
+    }
+
     // ─── Closed Lost routing tests ───────────────────────────────────────────────
 
     @isTest
