@@ -99,29 +99,18 @@ export default class AbxCampaignSync extends LightningElement {
 
     get statCards() {
         const s = this.syncStats;
-        return [
-            {
-                key: 'in-campaign',
-                label: 'In Campaign',
-                value: s.inCampaign,
-                isActive: this.filter === 'in-campaign',
-                cardClass: this.filter === 'in-campaign' ? 'stat-card stat-card--active' : 'stat-card',
-            },
-            {
-                key: 'needs-remove',
-                label: 'Remove',
-                value: s.toRemove,
-                isActive: this.filter === 'needs-remove',
-                cardClass: this.filter === 'needs-remove' ? 'stat-card stat-card--active stat-card--remove' : 'stat-card stat-card--remove',
-            },
-            {
-                key: 'needs-add',
-                label: 'Add',
-                value: s.toAdd,
-                isActive: this.filter === 'needs-add',
-                cardClass: this.filter === 'needs-add' ? 'stat-card stat-card--active stat-card--add' : 'stat-card stat-card--add',
-            },
+        const items = [
+            { key: 'in-campaign', label: 'In Campaign', value: s.inCampaign },
+            { key: 'needs-remove', label: 'Remove', value: s.toRemove },
+            { key: 'needs-add', label: 'Add', value: s.toAdd },
         ];
+        return items.map(item => ({
+            ...item,
+            isActive: this.filter === item.key,
+            cellClass: this.filter === item.key
+                ? 'stats-table__cell stats-table__cell--active'
+                : 'stats-table__cell',
+        }));
     }
 
     handleCardClick(event) {

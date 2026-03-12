@@ -21,17 +21,17 @@
             </div>
         </template>
 
-        <!-- Stat Cards (same visual as Review tab) -->
-        <div class="stats-bar slds-grid slds-grid_align-center slds-p-vertical_x-small slds-p-horizontal_medium">
+        <!-- Stats Table (matches Review tab tabular style) -->
+        <div class="stats-table">
             <template for:each={statCards} for:item="card">
                 <div
                     key={card.key}
-                    class={card.cardClass}
+                    class={card.cellClass}
                     data-filter={card.key}
                     onclick={handleCardClick}
                 >
-                    <div class="stat-card__value">{card.value}</div>
-                    <div class="stat-card__label">{card.label}</div>
+                    <span class="stats-table__value">{card.value}</span>
+                    <span class="stats-table__label">{card.label}</span>
                 </div>
             </template>
         </div>
