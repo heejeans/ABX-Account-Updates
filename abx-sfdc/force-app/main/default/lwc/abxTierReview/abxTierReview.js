@@ -21,16 +21,16 @@ const ACTION_CLASSES = {
 
 // Field filter category definitions (mirrors React FieldFilters FIELD_CONFIGS)
 const FIELD_CONFIGS = [
-    { key: 'intent', label: 'Intent', field: 'intent', order: ['High', 'Medium', 'Low', 'None'] },
-    { key: 'stage', label: 'Stage', field: 'stage' },
-    { key: 'segment', label: 'Segment', field: 'segment' },
-    { key: 'fitBucket', label: 'Fit Score', field: null },  // special bucketing
-    { key: 'currentTier', label: 'Current Tier', field: 'currentTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
+    { key: 'intent', label: 'Account Intent', field: 'intent', order: ['High', 'Medium', 'Low', 'None'] },
+    { key: 'stage', label: 'Account Stage', field: 'stage' },
+    { key: 'segment', label: 'Sales Segment', field: 'segment' },
+    { key: 'fitBucket', label: 'Fit Score Total', field: null },  // special bucketing
+    { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
     { key: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
-    { key: 'dnn', label: 'DNN', field: null },  // special boolean
+    { key: 'dnn', label: 'Marketplace Prospect', field: null },  // special boolean
     { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory' },
-    { key: 'accountExecutive', label: 'Account Executive', field: 'accountExecutiveName' },
-    { key: 'accountDevOwner', label: 'Account Dev Owner', field: 'accountDevOwnerName' },
+    { key: 'accountExecutive', label: 'Account Executive Owner', field: 'accountExecutiveName' },
+    { key: 'accountDevOwner', label: 'Account Development Owner', field: 'accountDevOwnerName' },
     { key: 'aeStatus', label: 'AE Assigned', field: null },
 ];
 
@@ -408,10 +408,16 @@ export default class AbxTierReview extends LightningElement {
         if (this.filterPanelOpen && !this.activeFilterCategory && this.filterCategories.length > 0) {
             this.activeFilterCategory = this.filterCategories[0].key;
         }
+        if (!this.filterPanelOpen) {
+            this.showDynamicFieldPicker = false;
+            this.dynamicFieldSearchTerm = '';
+        }
     }
 
     handleFilterCategoryClick(event) {
         this.activeFilterCategory = event.currentTarget.dataset.key;
+        this.showDynamicFieldPicker = false;
+        this.dynamicFieldSearchTerm = '';
     }
 
     handleFilterValueToggle(event) {
