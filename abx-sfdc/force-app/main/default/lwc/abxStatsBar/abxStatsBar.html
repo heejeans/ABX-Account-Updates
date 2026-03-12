@@ -1,24 +1,45 @@
 <template>
-    <div class="stats-bar slds-grid slds-grid_align-center slds-p-vertical_x-small slds-p-horizontal_medium">
+    <!-- Tier Distribution Chart -->
+    <template if:true={hasTierData}>
+        <div class="tier-chart">
+            <template for:each={chartBars} for:item="bar">
+                <div key={bar.tier} class="tier-chart__row">
+                    <span class="tier-chart__label">{bar.tier}</span>
+                    <div class="tier-chart__bars">
+                        <div class="tier-chart__bar-wrapper">
+                            <div class="tier-chart__bar tier-chart__bar--current" style={bar.currentStyle}></div>
+                            <span class="tier-chart__count">{bar.currentCount}</span>
+                        </div>
+                        <div class="tier-chart__bar-wrapper">
+                            <div class="tier-chart__bar tier-chart__bar--final" style={bar.finalStyle}></div>
+                            <span class="tier-chart__count">{bar.finalCount}</span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <div class="tier-chart__legend">
+                <span class="tier-chart__legend-item">
+                    <span class="tier-chart__swatch tier-chart__swatch--current"></span> Current
+                </span>
+                <span class="tier-chart__legend-item">
+                    <span class="tier-chart__swatch tier-chart__swatch--final"></span> Final
+                </span>
+            </div>
+        </div>
+    </template>
+
+    <!-- Stats Table -->
+    <div class="stats-table">
         <template for:each={cards} for:item="card">
             <div
                 key={card.key}
-                class={card.cardClass}
+                class={card.cellClass}
                 data-filter={card.key}
                 onclick={handleCardClick}
             >
-                <div class="stat-card__value">{card.value}</div>
-                <div class="stat-card__label">{card.label}</div>
+                <span class="stats-table__value">{card.value}</span>
+                <span class="stats-table__label">{card.label}</span>
             </div>
         </template>
-
-        <!-- Net change indicator -->
-        <div class="stat-summary slds-m-left_small">
-            <div class={netChangeClass}>{netChangeLabel}</div>
-            <div class="stat-summary__label">Net change</div>
-            <template if:true={hasApproved}>
-                <div class="stat-summary__approved">{approvedLabel}</div>
-            </template>
-        </div>
     </div>
 </template>

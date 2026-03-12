@@ -199,6 +199,28 @@ export default class AbxTierReview extends LightningElement {
             !!effectiveTier(a, this.approvedIds, this.rejectedIds) && !a.accountExecutiveName
         ).length;
 
+        // Tier distribution for chart
+        const currentTiers = { 'Tier 1': 0, 'Tier 2': 0, 'Tier 3': 0 };
+        const finalTiers = { 'Tier 1': 0, 'Tier 2': 0, 'Tier 3': 0 };
+        accts.forEach(a => {
+            if (a.currentTier && currentTiers.hasOwnProperty(a.currentTier)) {
+                currentTiers[a.currentTier]++;
+            }
+            let projectedTier;
+            if (this.approvedIds.has(a.id) || this.rejectedIds.has(a.id)) {
+                projectedTier = effectiveTier(a, this.approvedIds, this.rejectedIds);
+            } else if (a.action === 'Remove') {
+                projectedTier = null;
+            } else if (a.action === 'Add' || a.action === 'Reclassify') {
+                projectedTier = a.recommendedTier;
+            } else {
+                projectedTier = a.currentTier;
+            }
+            if (projectedTier && finalTiers.hasOwnProperty(projectedTier)) {
+                finalTiers[projectedTier]++;
+            }
+        });
+
         return {
             currentABX,
             estimatedFinalABX,
@@ -208,7 +230,12 @@ export default class AbxTierReview extends LightningElement {
             reclassifies: pendingReclassifies,
             unassignedAE,
             approvedCount: this.approvedIds.size,
+            tierDistribution: { current: currentTiers, final: finalTiers },
         };
+    }
+
+    get tierDistribution() {
+        return this.stats.tierDistribution || { current: {}, final: {} };
     }
 
     // ─── Computed: Campaign Stats ─────────────────────────────────────────────
