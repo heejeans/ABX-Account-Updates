@@ -1496,79 +1496,48 @@ export default class AbxTierReview extends LightningElement {
         }
     }
 
-    // Close filter panel, AE dropdown, and bulk picker when clicking outside.
-    // Uses CSS class matching on composedPath() — reliable across LWC shadow DOM
-    // (element reference comparison via path.includes(el) is unreliable in LWC).
-    handleBodyClick(event) {
-        if (!this.filterPanelOpen && !this.activeAEDropdownId && !this.bulkAEPickerOpen
-            && !this.showDynamicFieldPicker && !this.showDetailFieldPicker
-            && !this.bulkUpdatePickerOpen) {
-            return;
-        }
+    // ─── Backdrop overlay (close-on-click-outside) ───────────────────────
+    // Uses an invisible full-screen backdrop div instead of document click
+    // listener + composedPath(), which doesn't work in LWC shadow DOM.
 
-        const path = event.composedPath();
-
-        // Helper: check if any element in the composed path has a given CSS class
-        const clickedOn = (cls) => path.some(
-            el => el.classList && el.classList.contains(cls)
-        );
-
-        if (this.filterPanelOpen) {
-            if (!clickedOn('filter-panel') && !clickedOn('filter-toggle-btn')) {
-                this.filterPanelOpen = false;
-            }
-        }
-
-        if (this.activeAEDropdownId) {
-            if (!clickedOn('ae-combobox-wrapper') && !clickedOn('ae-assignment-section')) {
-                const closingId = this.activeAEDropdownId;
-                this.activeAEDropdownId = null;
-                // Clear search term and pending assignment for the row being closed
-                const newTerms = { ...this.aeSearchTerms };
-                delete newTerms[closingId];
-                this.aeSearchTerms = newTerms;
-                const newAssign = { ...this.aeAssignments };
-                delete newAssign[closingId];
-                this.aeAssignments = newAssign;
-            }
-        }
-
-        if (this.bulkAEPickerOpen) {
-            if (!clickedOn('ae-bulk-panel') && !clickedOn('bulk-ae-btn')) {
-                this.bulkAEPickerOpen = false;
-            }
-        }
-
-        if (this.showDynamicFieldPicker) {
-            if (!clickedOn('dynamic-field-picker') && !clickedOn('filter-cat--add')) {
-                this.showDynamicFieldPicker = false;
-            }
-        }
-
-        if (this.showDetailFieldPicker) {
-            if (!clickedOn('detail-field-picker') && !clickedOn('detail-add-field-btn')) {
-                this.showDetailFieldPicker = false;
-            }
-        }
-
-        if (this.bulkUpdatePickerOpen) {
-            if (!clickedOn('bulk-update-panel') && !clickedOn('bulk-update-btn')) {
-                this.bulkUpdatePickerOpen = false;
-                this.bulkUpdateSelectedField = null;
-                this.bulkUpdateFieldSearch = '';
-                this.bulkUpdateFieldValue = '';
-            }
-        }
+    get hasAnyOverlay() {
+        return this.filterPanelOpen || !!this.activeAEDropdownId || this.bulkAEPickerOpen
+            || this.showDynamicFieldPicker || this.showDetailFieldPicker
+            || this.bulkUpdatePickerOpen;
     }
 
-    connectedCallback() {
-        this._bodyClickHandler = this.handleBodyClick.bind(this);
-        // eslint-disable-next-line @lwc/lwc/no-document-query
-        document.addEventListener('click', this._bodyClickHandler);
+    handleBackdropClick() {
+        if (this.filterPanelOpen) {
+            this.filterPanelOpen = false;
+        }
+        if (this.showDynamicFieldPicker) {
+            this.showDynamicFieldPicker = false;
+        }
+        if (this.showDetailFieldPicker) {
+            this.showDetailFieldPicker = false;
+        }
+        if (this.activeAEDropdownId) {
+            const closingId = this.activeAEDropdownId;
+            this.activeAEDropdownId = null;
+            const newTerms = { ...this.aeSearchTerms };
+            delete newTerms[closingId];
+            this.aeSearchTerms = newTerms;
+            const newAssign = { ...this.aeAssignments };
+            delete newAssign[closingId];
+            this.aeAssignments = newAssign;
+        }
+        if (this.bulkAEPickerOpen) {
+            this.bulkAEPickerOpen = false;
+        }
+        if (this.bulkUpdatePickerOpen) {
+            this.bulkUpdatePickerOpen = false;
+            this.bulkUpdateSelectedField = null;
+            this.bulkUpdateFieldSearch = '';
+            this.bulkUpdateFieldValue = '';
+        }
     }
 
     disconnectedCallback() {
-        document.removeEventListener('click', this._bodyClickHandler);
         clearTimeout(this._searchTimer);
     }
 

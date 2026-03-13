@@ -1,6 +1,11 @@
 <template>
     <div class="abx-tier-review">
 
+        <!-- Invisible backdrop: closes all open dropdowns/panels when clicked -->
+        <template if:true={hasAnyOverlay}>
+            <div class="click-backdrop" onclick={handleBackdropClick}></div>
+        </template>
+
         <!-- ── Header ──────────────────────────────────────────────────────── -->
         <div class="slds-page-header slds-m-bottom_small">
             <div class="slds-page-header__row">

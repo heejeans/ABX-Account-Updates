@@ -41,6 +41,18 @@
     display: inline-block;
 }
 
+/* ── Invisible Backdrop (close-on-click-outside) ─────────────────────── */
+
+.click-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 99;
+    background: transparent;
+}
+
 /* ── Field Filter Panel ───────────────────────────────────────────────── */
 
 .filter-panel {
