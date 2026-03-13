@@ -18,9 +18,9 @@ public with sharing class ABXTierReviewController {
 
     // Fields queried for every Account in the review
     private static final String ACCOUNT_FIELDS =
-        'Id, Name, ABX_Tier__c, ABX_Account__c, ABX_Start_Date__c, ' +
+        'Id, Name, Type, ABX_Tier__c, ABX_Account__c, ABX_Start_Date__c, ' +
         'Fit_Score_Total__c, Account_Intent__c, Account_Stage__c, ' +
-        'Sales_Segment__c, Marketplace_Prospect__c, ' +
+        'Sales_Segment__c, Marketplace_Prospect__c, AI_Target_Account_Tier__c, ' +
         'Consulting_IT_Filter_Flow__c, Company_isDefunct__c, ' +
         'Qualified_Out_Detail__c, Qualified_Out_Date__c, Qualified_Out_Reason__c, ' +
         'ParentId, Entered_Closed_Lost_Date__c, ' +
@@ -84,6 +84,8 @@ public with sharing class ABXTierReviewController {
         @AuraEnabled public String apiName;
         @AuraEnabled public String label;
         @AuraEnabled public String type;
+        @AuraEnabled public Boolean isUpdateable;
+        @AuraEnabled public List<String> picklistValues;
     }
 
     public class AEUserOption {
@@ -118,7 +120,7 @@ public with sharing class ABXTierReviewController {
      * Fetches:
      *  - All currently tiered accounts (Remove / Reclassify / No Change)
      *  - All Closed Lost accounts (re-targeting evaluation)
-     *  - Prospect candidates with fit+intent or DNN flag (potential Adds)
+     *  - Prospect candidates with fit+intent, DNN flag, or AI Target tier (potential Adds)
      */
     @AuraEnabled(cacheable=true)
     public static ReviewData getAccountReviewData() {
@@ -134,6 +136,7 @@ public with sharing class ABXTierReviewController {
             '           AND Account_Intent__c != null' +
             '           AND Account_Intent__c != \'None\')' +
             '          OR Marketplace_Prospect__c = true' +
+            '          OR AI_Target_Account_Tier__c != null' +
             '        ))' +
             ' ORDER BY Name';
         List<Account> rawAccounts = Database.query(soql);
@@ -504,6 +507,19 @@ public with sharing class ABXTierReviewController {
             fdr.apiName = dfr.getName();
             fdr.label   = dfr.getLabel();
             fdr.type    = String.valueOf(dfr.getType());
+            fdr.isUpdateable = dfr.isUpdateable();
+
+            // Populate picklist values for picklist/multipicklist fields
+            Schema.DisplayType dtype = dfr.getType();
+            if (dtype == Schema.DisplayType.PICKLIST || dtype == Schema.DisplayType.MULTIPICKLIST) {
+                fdr.picklistValues = new List<String>();
+                for (Schema.PicklistEntry pe : dfr.getPicklistValues()) {
+                    if (pe.isActive()) {
+                        fdr.picklistValues.add(pe.getValue());
+                    }
+                }
+            }
+
             results.add(fdr);
         }
 
@@ -580,6 +596,111 @@ public with sharing class ABXTierReviewController {
             result.put(acct.Id, values);
         }
 
+        return result;
+    }
+
+    // ─── Bulk Update Account Field ──────────────────────────────────────────────
+
+    /**
+     * Bulk update a single field on multiple Account records.
+     * Validates field accessibility and updateability via Schema describe.
+     * Type-casts the string value to the correct Apex type based on DisplayType.
+     */
+    @AuraEnabled
+    public static ApplyResult bulkUpdateAccountField(
+        String fieldName, String fieldValue, List<String> accountIds
+    ) {
+        List<String> errors = new List<String>();
+        Integer updated = 0;
+
+        // Validate field exists and is updateable
+        Map<String, Schema.SObjectField> fieldMap = Schema.SObjectType.Account.fields.getMap();
+        String lower = fieldName.toLowerCase();
+        if (!fieldMap.containsKey(lower)) {
+            errors.add('Field not found: ' + fieldName);
+            ApplyResult result = new ApplyResult();
+            result.ok = false;
+            result.added = 0;
+            result.removed = 0;
+            result.updated = 0;
+            result.errors = errors;
+            return result;
+        }
+
+        Schema.DescribeFieldResult dfr = fieldMap.get(lower).getDescribe();
+        if (!dfr.isAccessible() || !dfr.isUpdateable()) {
+            errors.add('Field is not updateable: ' + fieldName);
+            ApplyResult result = new ApplyResult();
+            result.ok = false;
+            result.added = 0;
+            result.removed = 0;
+            result.updated = 0;
+            result.errors = errors;
+            return result;
+        }
+
+        // Type-cast the string value to the correct Apex type
+        Object typedValue;
+        Schema.DisplayType dtype = dfr.getType();
+        try {
+            if (fieldValue == null || fieldValue == '') {
+                typedValue = null;
+            } else if (dtype == Schema.DisplayType.BOOLEAN) {
+                typedValue = Boolean.valueOf(fieldValue);
+            } else if (dtype == Schema.DisplayType.DOUBLE || dtype == Schema.DisplayType.CURRENCY || dtype == Schema.DisplayType.PERCENT) {
+                typedValue = Decimal.valueOf(fieldValue);
+            } else if (dtype == Schema.DisplayType.INTEGER) {
+                typedValue = Integer.valueOf(fieldValue);
+            } else if (dtype == Schema.DisplayType.DATE) {
+                typedValue = Date.valueOf(fieldValue);
+            } else if (dtype == Schema.DisplayType.DATETIME) {
+                typedValue = Datetime.valueOf(fieldValue);
+            } else {
+                typedValue = fieldValue;
+            }
+        } catch (Exception e) {
+            errors.add('Invalid value for field type ' + String.valueOf(dtype) + ': ' + e.getMessage());
+            ApplyResult result = new ApplyResult();
+            result.ok = false;
+            result.added = 0;
+            result.removed = 0;
+            result.updated = 0;
+            result.errors = errors;
+            return result;
+        }
+
+        // Query accounts and update
+        Set<Id> idSet = new Set<Id>();
+        for (String aid : accountIds) {
+            idSet.add(Id.valueOf(aid));
+        }
+
+        String validFieldName = dfr.getName();
+        List<Account> toUpdate = new List<Account>();
+        for (Account acct : [SELECT Id FROM Account WHERE Id IN :idSet]) {
+            acct.put(validFieldName, typedValue);
+            toUpdate.add(acct);
+        }
+
+        if (!toUpdate.isEmpty()) {
+            List<Database.SaveResult> results = Database.update(toUpdate, false);
+            for (Integer i = 0; i < results.size(); i++) {
+                if (results[i].isSuccess()) {
+                    updated++;
+                } else {
+                    for (Database.Error err : results[i].getErrors()) {
+                        errors.add('Update failed for ' + toUpdate[i].Id + ': ' + err.getMessage());
+                    }
+                }
+            }
+        }
+
+        ApplyResult result = new ApplyResult();
+        result.ok = errors.isEmpty();
+        result.added = 0;
+        result.removed = 0;
+        result.updated = updated;
+        result.errors = errors;
         return result;
     }
 }

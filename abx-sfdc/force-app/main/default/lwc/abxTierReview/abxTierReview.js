@@ -9,6 +9,7 @@ import getAEUsers from '@salesforce/apex/ABXTierReviewController.getAEUsers';
 import assignAccountExecutives from '@salesforce/apex/ABXTierReviewController.assignAccountExecutives';
 import getAccountFieldDescribe from '@salesforce/apex/ABXTierReviewController.getAccountFieldDescribe';
 import getDynamicFieldValues from '@salesforce/apex/ABXTierReviewController.getDynamicFieldValues';
+import bulkUpdateAccountField from '@salesforce/apex/ABXTierReviewController.bulkUpdateAccountField';
 
 // Action badge CSS classes
 const ACTION_CLASSES = {
@@ -33,6 +34,8 @@ const FIELD_CONFIGS = [
     { key: 'accountDevOwner', label: 'Account Development Owner', field: 'accountDevOwnerName' },
     { key: 'aeStatus', label: 'AE Assigned', field: null },
 ];
+
+const ACTIONABLE_ACTIONS = new Set(['Add', 'Remove', 'Reclassify']);
 
 function getFitBucket(fitScore) {
     if (fitScore == null) return 'No Score';
@@ -138,8 +141,69 @@ export default class AbxTierReview extends LightningElement {
     @track showDetailFieldPicker = false;
     isDynamicFieldsLoading = false;
 
+    // Bulk field update state
+    @track bulkUpdatePickerOpen = false;
+    @track bulkUpdateFieldSearch = '';
+    @track bulkUpdateSelectedField = null;
+    @track bulkUpdateFieldValue = '';
+    isBulkUpdating = false;
+
     _wiredAccountResult;
     _wiredCampaignResult;
+
+    // ─── Memoization caches ────────────────────────────────────────────────
+    // Each expensive getter checks if its dependencies changed by reference.
+    // If unchanged, returns the cached result — prevents recomputation on
+    // unrelated state changes (e.g. checkbox toggle doesn't recompute stats).
+
+    _cachedStats = null;
+    _statsDep1 = null; // allAccounts
+    _statsDep2 = null; // approvedIds
+    _statsDep3 = null; // rejectedIds
+
+    _cachedBaseFiltered = null;
+    _bfDep1 = null; // allAccounts
+    _bfDep2 = null; // activeFilter
+    _bfDep3 = null; // approvedIds
+    _bfDep4 = null; // rejectedIds
+    _bfDep5 = null; // activeReasonFilter
+
+    _cachedFiltered = null;
+    _fDep1 = null; // baseFilteredAccounts ref
+    _fDep2 = null; // fieldFilters
+    _fDep3 = null; // searchTerm
+    _fDep4 = null; // dynamicFieldValues
+    _fDep5 = null; // dynamicFilterFields
+
+    _cachedFilterCats = null;
+    _fcDep1 = null; // baseFilteredAccounts ref
+    _fcDep2 = null; // fieldFilters
+    _fcDep3 = null; // activeFilterCategory
+    _fcDep4 = null; // dynamicFieldValues
+    _fcDep5 = null; // dynamicFilterFields
+
+    _cachedReasonGroups = null;
+    _rgDep1 = null; // allAccounts
+    _rgDep2 = null; // activeFilter
+    _rgDep3 = null; // approvedIds
+    _rgDep4 = null; // rejectedIds
+    _rgDep5 = null; // activeReasonFilter
+
+    _cachedBaseRows = null;
+    _brDep1 = null; // filteredAccounts ref
+    _brDep2 = null; // dynamicFieldValues
+    _brDep3 = null; // dynamicDetailFields
+    _brDep4 = null; // approvedIds
+
+    // Pre-computed ruleGroup cache (keyed by account id — stable after data load)
+    _ruleGroupCache = new Map();
+
+    // Selectable IDs set for fast selectedCount
+    _cachedSelectableIdSet = null;
+    _selDep1 = null; // selectableRows ref
+
+    // Debounce timer for search
+    _searchTimer = null;
 
     // ─── Wire adapters ────────────────────────────────────────────────────────
 
@@ -148,6 +212,7 @@ export default class AbxTierReview extends LightningElement {
         this._wiredAccountResult = result;
         if (result.data) {
             this.allAccounts = result.data.accounts || [];
+            this._ruleGroupCache = new Map();
             this.isLoading = false;
         } else if (result.error) {
             this.showToast('Error', 'Failed to load account data: ' + this.reduceErrors(result.error), 'error');
@@ -184,31 +249,60 @@ export default class AbxTierReview extends LightningElement {
         }
     }
 
-    // ─── Computed: Review Stats ───────────────────────────────────────────────
+    // ─── Computed: Review Stats (memoized, single-pass) ───────────────────
 
     get stats() {
+        // Return cache if dependencies unchanged
+        if (this._statsDep1 === this.allAccounts
+            && this._statsDep2 === this.approvedIds
+            && this._statsDep3 === this.rejectedIds
+            && this._cachedStats) {
+            return this._cachedStats;
+        }
+
         const accts = this.allAccounts;
-        if (!accts.length) return {};
+        if (!accts.length) {
+            this._cachedStats = {};
+            this._statsDep1 = this.allAccounts;
+            this._statsDep2 = this.approvedIds;
+            this._statsDep3 = this.rejectedIds;
+            return this._cachedStats;
+        }
 
-        const currentABX = accts.filter(a => !!effectiveTier(a, this.approvedIds, this.rejectedIds)).length;
-        const pendingAdds = accts.filter(a => a.action === 'Add' && !this.approvedIds.has(a.id) && !this.rejectedIds.has(a.id)).length;
-        const pendingRemoves = accts.filter(a => a.action === 'Remove' && !this.approvedIds.has(a.id) && !this.rejectedIds.has(a.id)).length;
-        const pendingReclassifies = accts.filter(a => a.action === 'Reclassify' && !this.approvedIds.has(a.id) && !this.rejectedIds.has(a.id)).length;
-        const estimatedFinalABX = currentABX + pendingAdds - pendingRemoves;
-        const unassignedAE = accts.filter(a =>
-            !!effectiveTier(a, this.approvedIds, this.rejectedIds) && !a.accountExecutiveName
-        ).length;
-
-        // Tier distribution for chart
+        // Single pass over all accounts
+        let currentABX = 0, pendingAdds = 0, pendingRemoves = 0,
+            pendingReclassifies = 0, unassignedAE = 0;
         const currentTiers = { 'Tier 1': 0, 'Tier 2': 0, 'Tier 3': 0 };
         const finalTiers = { 'Tier 1': 0, 'Tier 2': 0, 'Tier 3': 0 };
-        accts.forEach(a => {
+        const approved = this.approvedIds;
+        const rejected = this.rejectedIds;
+
+        for (let i = 0, len = accts.length; i < len; i++) {
+            const a = accts[i];
+            const tier = effectiveTier(a, approved, rejected);
+            const hasTier = !!tier;
+            const isPending = !approved.has(a.id) && !rejected.has(a.id);
+
+            if (hasTier) {
+                currentABX++;
+                if (!a.accountExecutiveName) unassignedAE++;
+            }
+
+            if (isPending) {
+                if (a.action === 'Add') pendingAdds++;
+                else if (a.action === 'Remove') pendingRemoves++;
+                else if (a.action === 'Reclassify') pendingReclassifies++;
+            }
+
+            // Current tier distribution
             if (a.currentTier && currentTiers.hasOwnProperty(a.currentTier)) {
                 currentTiers[a.currentTier]++;
             }
+
+            // Final/projected tier distribution
             let projectedTier;
-            if (this.approvedIds.has(a.id) || this.rejectedIds.has(a.id)) {
-                projectedTier = effectiveTier(a, this.approvedIds, this.rejectedIds);
+            if (!isPending) {
+                projectedTier = tier;
             } else if (a.action === 'Remove') {
                 projectedTier = null;
             } else if (a.action === 'Add' || a.action === 'Reclassify') {
@@ -219,9 +313,10 @@ export default class AbxTierReview extends LightningElement {
             if (projectedTier && finalTiers.hasOwnProperty(projectedTier)) {
                 finalTiers[projectedTier]++;
             }
-        });
+        }
 
-        return {
+        const estimatedFinalABX = currentABX + pendingAdds - pendingRemoves;
+        const result = {
             currentABX,
             estimatedFinalABX,
             netChange: estimatedFinalABX - currentABX,
@@ -229,9 +324,15 @@ export default class AbxTierReview extends LightningElement {
             removes: pendingRemoves,
             reclassifies: pendingReclassifies,
             unassignedAE,
-            approvedCount: this.approvedIds.size,
+            approvedCount: approved.size,
             tierDistribution: { current: currentTiers, final: finalTiers },
         };
+
+        this._cachedStats = result;
+        this._statsDep1 = this.allAccounts;
+        this._statsDep2 = this.approvedIds;
+        this._statsDep3 = this.rejectedIds;
+        return result;
     }
 
     get tierDistribution() {
@@ -274,54 +375,104 @@ export default class AbxTierReview extends LightningElement {
         return cs.toAdd + cs.toRemove;
     }
 
-    // ─── Computed: Filtered Accounts (Review tab) ─────────────────────────────
+    // ─── Computed: Filtered Accounts (memoized) ───────────────────────────
 
     get baseFilteredAccounts() {
-        let base = this.allAccounts;
+        if (this._bfDep1 === this.allAccounts
+            && this._bfDep2 === this.activeFilter
+            && this._bfDep3 === this.approvedIds
+            && this._bfDep4 === this.rejectedIds
+            && this._bfDep5 === this.activeReasonFilter
+            && this._cachedBaseFiltered) {
+            return this._cachedBaseFiltered;
+        }
+
         const filter = this.activeFilter;
+        const approved = this.approvedIds;
+        const rejected = this.rejectedIds;
+        const reasonFilter = this.activeReasonFilter;
+        const result = [];
 
-        // Apply main stat-card filter
-        base = base.filter(a => {
-            if (filter === 'Current ABX') return !!effectiveTier(a, this.approvedIds, this.rejectedIds);
-            if (filter === 'Final ABX') {
-                return a.action === 'No Change' || a.action === 'Reclassify' ||
-                    (a.action === 'Remove' && this.rejectedIds.has(a.id)) ||
-                    (a.action === 'Add' && !this.rejectedIds.has(a.id));
-            }
-            if (filter === 'Unassigned AE') {
-                return !!effectiveTier(a, this.approvedIds, this.rejectedIds) && !a.accountExecutiveName;
-            }
-            if (['Add', 'Remove', 'Reclassify'].includes(filter)) {
-                if (a.action !== filter) return false;
-                if (this.approvedIds.has(a.id) || this.rejectedIds.has(a.id)) return false;
-                if (this.activeReasonFilter && getRuleGroup(a) !== this.activeReasonFilter) return false;
-                return true;
-            }
-            return true;
-        });
+        for (let i = 0, len = this.allAccounts.length; i < len; i++) {
+            const a = this.allAccounts[i];
+            let include = false;
 
-        return base;
+            if (filter === 'Current ABX') {
+                include = !!effectiveTier(a, approved, rejected);
+            } else if (filter === 'Final ABX') {
+                include = a.action === 'No Change' || a.action === 'Reclassify' ||
+                    (a.action === 'Remove' && rejected.has(a.id)) ||
+                    (a.action === 'Add' && !rejected.has(a.id));
+            } else if (filter === 'Unassigned AE') {
+                include = !!effectiveTier(a, approved, rejected) && !a.accountExecutiveName;
+            } else if (ACTIONABLE_ACTIONS.has(filter)) {
+                include = a.action === filter
+                    && !approved.has(a.id) && !rejected.has(a.id)
+                    && (!reasonFilter || this._getRuleGroup(a) === reasonFilter);
+            } else {
+                include = true;
+            }
+
+            if (include) result.push(a);
+        }
+
+        this._cachedBaseFiltered = result;
+        this._bfDep1 = this.allAccounts;
+        this._bfDep2 = this.activeFilter;
+        this._bfDep3 = this.approvedIds;
+        this._bfDep4 = this.rejectedIds;
+        this._bfDep5 = this.activeReasonFilter;
+        return result;
     }
 
     get filteredAccounts() {
-        let base = this.baseFilteredAccounts;
+        if (this._fDep1 === this.baseFilteredAccounts
+            && this._fDep2 === this.fieldFilters
+            && this._fDep3 === this.searchTerm
+            && this._fDep4 === this.dynamicFieldValues
+            && this._fDep5 === this.dynamicFilterFields
+            && this._cachedFiltered) {
+            return this._cachedFiltered;
+        }
 
-        // Apply field filters (static + dynamic)
+        let base = this.baseFilteredAccounts;
         const activeFilters = this.fieldFilters;
         const dynVals = this.dynamicFieldValues;
-        for (const config of this.allFieldConfigs) {
+        const configs = this.allFieldConfigs;
+
+        // Apply field filters (static + dynamic)
+        for (let c = 0, cLen = configs.length; c < cLen; c++) {
+            const config = configs[c];
             const selected = activeFilters[config.key];
             if (selected && selected.size > 0) {
-                base = base.filter(a => selected.has(getFieldValue(a, config, dynVals)));
+                const filtered = [];
+                for (let i = 0, len = base.length; i < len; i++) {
+                    if (selected.has(getFieldValue(base[i], config, dynVals))) {
+                        filtered.push(base[i]);
+                    }
+                }
+                base = filtered;
             }
         }
 
         // Apply search
         if (this.searchTerm) {
             const q = this.searchTerm.toLowerCase();
-            base = base.filter(a => a.name?.toLowerCase().includes(q));
+            const searched = [];
+            for (let i = 0, len = base.length; i < len; i++) {
+                if (base[i].name && base[i].name.toLowerCase().indexOf(q) !== -1) {
+                    searched.push(base[i]);
+                }
+            }
+            base = searched;
         }
 
+        this._cachedFiltered = base;
+        this._fDep1 = this.baseFilteredAccounts;
+        this._fDep2 = this.fieldFilters;
+        this._fDep3 = this.searchTerm;
+        this._fDep4 = this.dynamicFieldValues;
+        this._fDep5 = this.dynamicFilterFields;
         return base;
     }
 
@@ -333,12 +484,13 @@ export default class AbxTierReview extends LightningElement {
         return this.allAccounts.length > 0;
     }
 
-    // ─── Field Filter Logic ───────────────────────────────────────────────────
+    // ─── Field Filter Logic ───────────────────────────────────────────────
 
     get activeFieldFilterCount() {
         let count = 0;
-        for (const key of Object.keys(this.fieldFilters)) {
-            if (this.fieldFilters[key] && this.fieldFilters[key].size > 0) count++;
+        const filters = this.fieldFilters;
+        for (const key in filters) {
+            if (filters[key] && filters[key].size > 0) count++;
         }
         return count;
     }
@@ -369,38 +521,66 @@ export default class AbxTierReview extends LightningElement {
         ];
     }
 
+    // Memoized + single-pass count computation (was O(n×v) per config, now O(n))
     get filterCategories() {
+        if (this._fcDep1 === this.baseFilteredAccounts
+            && this._fcDep2 === this.fieldFilters
+            && this._fcDep3 === this.activeFilterCategory
+            && this._fcDep4 === this.dynamicFieldValues
+            && this._fcDep5 === this.dynamicFilterFields
+            && this._cachedFilterCats) {
+            return this._cachedFilterCats;
+        }
+
         const accounts = this.baseFilteredAccounts;
         const dynVals = this.dynamicFieldValues;
-        return this.allFieldConfigs.map(config => {
-            const values = new Set();
-            accounts.forEach(a => values.add(getFieldValue(a, config, dynVals)));
-            if (values.size <= 1) return null; // skip single-value categories
+        const configs = this.allFieldConfigs;
+        const result = [];
+
+        for (let c = 0, cLen = configs.length; c < cLen; c++) {
+            const config = configs[c];
+            // Single pass: collect unique values AND count them simultaneously
+            const valueCounts = new Map();
+            for (let i = 0, len = accounts.length; i < len; i++) {
+                const val = getFieldValue(accounts[i], config, dynVals);
+                valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
+            }
+
+            if (valueCounts.size <= 1) continue; // skip single-value categories
 
             let sortedValues;
             if (config.order) {
-                sortedValues = config.order.filter(v => values.has(v));
+                sortedValues = config.order.filter(v => valueCounts.has(v));
             } else {
-                sortedValues = [...values].sort();
+                sortedValues = [...valueCounts.keys()].sort();
             }
 
             const selected = this.fieldFilters[config.key] || new Set();
-            return {
+            const isActive = this.activeFilterCategory === config.key;
+
+            result.push({
                 key: config.key,
                 label: config.label,
                 isDynamic: !!config.isDynamic,
-                isActive: this.activeFilterCategory === config.key,
-                catClass: this.activeFilterCategory === config.key
-                    ? 'filter-cat filter-cat--active' : 'filter-cat',
+                isActive,
+                catClass: isActive ? 'filter-cat filter-cat--active' : 'filter-cat',
                 hasSelections: selected.size > 0,
                 values: sortedValues.map(v => ({
                     value: v,
                     label: v,
                     checked: selected.has(v),
-                    count: accounts.filter(a => getFieldValue(a, config, dynVals) === v).length,
+                    count: valueCounts.get(v) || 0,
                 })),
-            };
-        }).filter(Boolean);
+            });
+        }
+
+        this._cachedFilterCats = result;
+        this._fcDep1 = this.baseFilteredAccounts;
+        this._fcDep2 = this.fieldFilters;
+        this._fcDep3 = this.activeFilterCategory;
+        this._fcDep4 = this.dynamicFieldValues;
+        this._fcDep5 = this.dynamicFilterFields;
+        return result;
     }
 
     handleToggleFilterPanel() {
@@ -450,19 +630,43 @@ export default class AbxTierReview extends LightningElement {
         return cat ? cat.values : [];
     }
 
-    // ─── Computed: Reason Groups ──────────────────────────────────────────────
+    // ─── Computed: Reason Groups (memoized) ──────────────────────────────
 
     get reasonGroups() {
-        const ACTIONABLE = ['Add', 'Remove', 'Reclassify'];
-        if (!ACTIONABLE.includes(this.activeFilter)) return [];
+        if (this._rgDep1 === this.allAccounts
+            && this._rgDep2 === this.activeFilter
+            && this._rgDep3 === this.approvedIds
+            && this._rgDep4 === this.rejectedIds
+            && this._rgDep5 === this.activeReasonFilter
+            && this._cachedReasonGroups) {
+            return this._cachedReasonGroups;
+        }
+
+        if (!ACTIONABLE_ACTIONS.has(this.activeFilter)) {
+            this._cachedReasonGroups = [];
+            this._rgDep1 = this.allAccounts;
+            this._rgDep2 = this.activeFilter;
+            this._rgDep3 = this.approvedIds;
+            this._rgDep4 = this.rejectedIds;
+            this._rgDep5 = this.activeReasonFilter;
+            return this._cachedReasonGroups;
+        }
+
         const counts = {};
-        this.allAccounts
-            .filter(a => a.action === this.activeFilter && !this.approvedIds.has(a.id) && !this.rejectedIds.has(a.id))
-            .forEach(a => {
-                const g = getRuleGroup(a);
+        const accts = this.allAccounts;
+        const filter = this.activeFilter;
+        const approved = this.approvedIds;
+        const rejected = this.rejectedIds;
+
+        for (let i = 0, len = accts.length; i < len; i++) {
+            const a = accts[i];
+            if (a.action === filter && !approved.has(a.id) && !rejected.has(a.id)) {
+                const g = this._getRuleGroup(a);
                 counts[g] = (counts[g] || 0) + 1;
-            });
-        return Object.entries(counts)
+            }
+        }
+
+        const result = Object.entries(counts)
             .sort((a, b) => b[1] - a[1])
             .map(([label, count]) => ({
                 label,
@@ -472,21 +676,92 @@ export default class AbxTierReview extends LightningElement {
                     ? 'slds-badge slds-theme_success slds-m-right_xx-small'
                     : 'slds-badge slds-m-right_xx-small',
             }));
+
+        this._cachedReasonGroups = result;
+        this._rgDep1 = this.allAccounts;
+        this._rgDep2 = this.activeFilter;
+        this._rgDep3 = this.approvedIds;
+        this._rgDep4 = this.rejectedIds;
+        this._rgDep5 = this.activeReasonFilter;
+        return result;
     }
 
     get hasReasonGroups() {
         return this.reasonGroups.length > 0;
     }
 
-    // ─── Computed: Datatable rows ─────────────────────────────────────────────
+    // Cached ruleGroup lookup — computed once per account, reused everywhere
+    _getRuleGroup(account) {
+        let group = this._ruleGroupCache.get(account.id);
+        if (group === undefined) {
+            group = getRuleGroup(account);
+            this._ruleGroupCache.set(account.id, group);
+        }
+        return group;
+    }
+
+    // ─── Computed: Datatable rows (optimized) ─────────────────────────────
 
     get datatableRows() {
+        const filtered = this.filteredAccounts;
         const dynVals = this.dynamicFieldValues;
+        const detailFields = this.dynamicDetailFields;
+        const approved = this.approvedIds;
+
+        // Rebuild base rows when underlying data changes (not on selection toggle)
+        if (this._brDep1 !== filtered
+            || this._brDep2 !== dynVals
+            || this._brDep3 !== detailFields
+            || this._brDep4 !== approved) {
+            this._cachedBaseRows = this._buildBaseRows(filtered, dynVals, detailFields, approved);
+            this._brDep1 = filtered;
+            this._brDep2 = dynVals;
+            this._brDep3 = detailFields;
+            this._brDep4 = approved;
+        }
+
+        // Fast overlay: apply lightweight mutable state to cached base rows
         const isUnassignedAE = this.activeFilter === 'Unassigned AE';
-        return this.filteredAccounts.map(a => {
-            const isActionable = ['Add', 'Remove', 'Reclassify'].includes(a.action)
-                && !this.approvedIds.has(a.id);
-            return {
+        const isCurrentABX = this.activeFilter === 'Current ABX';
+        const selected = this.selectedIds;
+        const rejected = this.rejectedIds;
+        const activeDropdown = this.activeAEDropdownId;
+        const aeTerms = this.aeSearchTerms;
+        const aeAssign = this.aeAssignments;
+        const baseRows = this._cachedBaseRows;
+        const rows = new Array(baseRows.length);
+
+        for (let i = 0, len = baseRows.length; i < len; i++) {
+            const base = baseRows[i];
+            const id = base.id;
+            const isApproved = approved.has(id);
+            const isRejected = rejected.has(id);
+            rows[i] = {
+                ...base,
+                isApproved,
+                isRejected,
+                isSelected: selected.has(id),
+                isSelectable: base._isActionableType || isUnassignedAE || isCurrentABX,
+                statusLabel: isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending',
+                statusClass: isApproved ? 'slds-text-color_success' : isRejected ? 'slds-text-color_error' : '',
+                aeSearchTerm: aeTerms[id] || '',
+                showAEDropdown: activeDropdown === id,
+                // Only compute filtered AE users for the single row with open dropdown
+                filteredAEUsers: activeDropdown === id ? this._getFilteredAEUsers(id) : [],
+                hasPendingAE: aeAssign.hasOwnProperty(id),
+            };
+        }
+        return rows;
+    }
+
+    _buildBaseRows(filtered, dynVals, detailFields, approved) {
+        const hasDetails = detailFields.length > 0;
+        const rows = new Array(filtered.length);
+
+        for (let i = 0, len = filtered.length; i < len; i++) {
+            const a = filtered[i];
+            const isActionableType = ACTIONABLE_ACTIONS.has(a.action);
+            rows[i] = {
                 ...a,
                 accountUrl: `/lightning/r/Account/${a.id}/view`,
                 actionClass: ACTION_CLASSES[a.action] || 'slds-badge',
@@ -500,22 +775,11 @@ export default class AbxTierReview extends LightningElement {
                 hasAE: !!a.accountExecutiveName,
                 accountDevOwnerName: a.accountDevOwnerName || null,
                 hasDevOwner: !!a.accountDevOwnerName,
-                aeSearchTerm: this.aeSearchTerms[a.id] || '',
-                showAEDropdown: this.activeAEDropdownId === a.id,
-                filteredAEUsers: this._getFilteredAEUsers(a.id),
-                hasPendingAE: this.aeAssignments.hasOwnProperty(a.id),
-                isApproved: this.approvedIds.has(a.id),
-                isRejected: this.rejectedIds.has(a.id),
-                isSelected: this.selectedIds.has(a.id),
-                isActionable,
-                isSelectable: isActionable || isUnassignedAE,
-                statusLabel: this.approvedIds.has(a.id) ? 'Approved' :
-                    this.rejectedIds.has(a.id) ? 'Rejected' : 'Pending',
-                statusClass: this.approvedIds.has(a.id) ? 'slds-text-color_success' :
-                    this.rejectedIds.has(a.id) ? 'slds-text-color_error' : '',
-                ruleGroup: getRuleGroup(a),
+                _isActionableType: isActionableType,
+                isActionable: isActionableType && !approved.has(a.id),
+                ruleGroup: this._getRuleGroup(a),
                 showRuleGroup: a.action !== 'No Change',
-                dynamicDetails: this.dynamicDetailFields.map(f => {
+                dynamicDetails: hasDetails ? detailFields.map(f => {
                     const accountVals = dynVals[a.id];
                     let rawValue = accountVals ? accountVals[f.apiName] : null;
                     if (rawValue === true) rawValue = 'Yes';
@@ -525,10 +789,11 @@ export default class AbxTierReview extends LightningElement {
                         label: f.label,
                         value: rawValue != null ? String(rawValue) : '—',
                     };
-                }),
-                hasDynamicDetails: this.dynamicDetailFields.length > 0,
+                }) : [],
+                hasDynamicDetails: hasDetails,
             };
-        });
+        }
+        return rows;
     }
 
     // ─── Tab handling ─────────────────────────────────────────────────────────
@@ -551,7 +816,7 @@ export default class AbxTierReview extends LightningElement {
         this.activeTab = event.target.value;
     }
 
-    // ─── Filter stats bar handling ────────────────────────────────────────────
+    // ─── Filter stats bar handling ────────────────────────────────────────
 
     handleStatClick(event) {
         const filter = event.detail ? event.detail.filter : event.currentTarget.dataset.filter;
@@ -565,17 +830,22 @@ export default class AbxTierReview extends LightningElement {
         this.activeReasonFilter = this.activeReasonFilter === reason ? null : reason;
     }
 
-    // ─── Search ───────────────────────────────────────────────────────────────
+    // ─── Search (debounced) ───────────────────────────────────────────────
 
     handleSearchChange(event) {
-        this.searchTerm = event.target.value;
+        const value = event.target.value;
+        clearTimeout(this._searchTimer);
+        this._searchTimer = setTimeout(() => {
+            this.searchTerm = value;
+        }, 150);
     }
 
     handleClearSearch() {
+        clearTimeout(this._searchTimer);
         this.searchTerm = '';
     }
 
-    // ─── Approve / Reject handlers ────────────────────────────────────────────
+    // ─── Approve / Reject handlers ────────────────────────────────────────
 
     handleApprove(event) {
         const id = event.currentTarget.dataset.id;
@@ -610,35 +880,48 @@ export default class AbxTierReview extends LightningElement {
         this.rejectedIds = newRejected;
     }
 
-    // ─── Bulk actions ─────────────────────────────────────────────────────────
+    // ─── Bulk actions ─────────────────────────────────────────────────────
 
     get isActionableFilter() {
-        return ['Add', 'Remove', 'Reclassify'].includes(this.activeFilter);
+        return ACTIONABLE_ACTIONS.has(this.activeFilter);
     }
 
     get isUnassignedAEFilter() {
         return this.activeFilter === 'Unassigned AE';
     }
 
+    get isCurrentABXFilter() {
+        return this.activeFilter === 'Current ABX';
+    }
+
     get showSelectAll() {
-        return this.isActionableFilter || this.isUnassignedAEFilter;
+        return this.isActionableFilter || this.isUnassignedAEFilter || this.isCurrentABXFilter;
     }
 
     get actionableRows() {
+        const approved = this.approvedIds;
         return this.filteredAccounts.filter(a =>
-            ['Add', 'Remove', 'Reclassify'].includes(a.action) && !this.approvedIds.has(a.id)
+            ACTIONABLE_ACTIONS.has(a.action) && !approved.has(a.id)
         );
     }
 
     get selectableRows() {
-        if (this.isUnassignedAEFilter) return this.filteredAccounts;
+        if (this.isUnassignedAEFilter || this.isCurrentABXFilter) return this.filteredAccounts;
         return this.actionableRows;
     }
 
+    // Fast selectedCount using cached Set of selectable IDs
     get selectedCount() {
-        return [...this.selectedIds].filter(id =>
-            this.selectableRows.some(a => a.id === id)
-        ).length;
+        const selectable = this.selectableRows;
+        if (this._selDep1 !== selectable) {
+            this._cachedSelectableIdSet = new Set(selectable.map(a => a.id));
+            this._selDep1 = selectable;
+        }
+        let count = 0;
+        for (const id of this.selectedIds) {
+            if (this._cachedSelectableIdSet.has(id)) count++;
+        }
+        return count;
     }
 
     get hasSelection() {
@@ -647,7 +930,12 @@ export default class AbxTierReview extends LightningElement {
 
     get allSelected() {
         const rows = this.selectableRows;
-        return rows.length > 0 && rows.every(a => this.selectedIds.has(a.id));
+        if (rows.length === 0) return false;
+        const selected = this.selectedIds;
+        for (let i = 0, len = rows.length; i < len; i++) {
+            if (!selected.has(rows[i].id)) return false;
+        }
+        return true;
     }
 
     handleToggleSelect(event) {
@@ -690,7 +978,7 @@ export default class AbxTierReview extends LightningElement {
         this.selectedIds = new Set();
     }
 
-    // ─── Apply to Salesforce ──────────────────────────────────────────────────
+    // ─── Apply to Salesforce ──────────────────────────────────────────────
 
     get hasApprovedChanges() {
         return this.approvedIds.size > 0;
@@ -725,6 +1013,7 @@ export default class AbxTierReview extends LightningElement {
                 this.showToast('Success',
                     `Tier changes applied: ${result.added} added, ${result.removed} removed, ${result.updated} updated.`,
                     'success');
+                this._invalidateCaches();
                 this.approvedIds = new Set();
                 this.rejectedIds = new Set();
                 this.selectedIds = new Set();
@@ -741,9 +1030,10 @@ export default class AbxTierReview extends LightningElement {
         }
     }
 
-    // ─── Reset ────────────────────────────────────────────────────────────────
+    // ─── Reset ────────────────────────────────────────────────────────────
 
     handleReset() {
+        this._invalidateCaches();
         this.approvedIds = new Set();
         this.rejectedIds = new Set();
         this.selectedIds = new Set();
@@ -761,12 +1051,17 @@ export default class AbxTierReview extends LightningElement {
         this.dynamicFieldValues = {};
         this.showDynamicFieldPicker = false;
         this.showDetailFieldPicker = false;
+        this.bulkUpdatePickerOpen = false;
+        this.bulkUpdateSelectedField = null;
+        this.bulkUpdateFieldSearch = '';
+        this.bulkUpdateFieldValue = '';
     }
 
-    // ─── Refresh ──────────────────────────────────────────────────────────────
+    // ─── Refresh ──────────────────────────────────────────────────────────
 
     async handleRefresh() {
         this.isLoading = true;
+        this._invalidateCaches();
         this.approvedIds = new Set();
         this.rejectedIds = new Set();
         this.selectedIds = new Set();
@@ -775,10 +1070,26 @@ export default class AbxTierReview extends LightningElement {
         this.aeSearchTerms = {};
         this.activeAEDropdownId = null;
         this.bulkAEPickerOpen = false;
+        this.bulkUpdatePickerOpen = false;
+        this.bulkUpdateSelectedField = null;
+        this.bulkUpdateFieldSearch = '';
+        this.bulkUpdateFieldValue = '';
         await Promise.all([
             refreshApex(this._wiredAccountResult),
             refreshApex(this._wiredCampaignResult),
         ]);
+    }
+
+    // Invalidate all memoization caches
+    _invalidateCaches() {
+        this._cachedStats = null;
+        this._cachedBaseFiltered = null;
+        this._cachedFiltered = null;
+        this._cachedFilterCats = null;
+        this._cachedReasonGroups = null;
+        this._cachedBaseRows = null;
+        this._cachedSelectableIdSet = null;
+        this._ruleGroupCache = new Map();
     }
 
     // ─── Campaign Sync handlers (dispatched from c-abx-campaign-sync) ─────────
@@ -830,7 +1141,7 @@ export default class AbxTierReview extends LightningElement {
         }
     }
 
-    // ─── Row expansion ────────────────────────────────────────────────────────
+    // ─── Row expansion ────────────────────────────────────────────────────
 
     handleToggleExpand(event) {
         const id = event.currentTarget.dataset.id;
@@ -840,7 +1151,7 @@ export default class AbxTierReview extends LightningElement {
         }
     }
 
-    // ─── AE Assignment ────────────────────────────────────────────────────────
+    // ─── AE Assignment ────────────────────────────────────────────────────
 
     _getFilteredAEUsers(accountId) {
         const term = (this.aeSearchTerms[accountId] || '').toLowerCase();
@@ -941,7 +1252,133 @@ export default class AbxTierReview extends LightningElement {
         }
     }
 
-    // ─── Dynamic Field Pickers ────────────────────────────────────────────────
+    // ─── Bulk Field Update ──────────────────────────────────────────────
+
+    get filteredUpdateFields() {
+        let fields = this.accountFieldDescribe.filter(f => f.isUpdateable);
+        if (this.bulkUpdateFieldSearch) {
+            const q = this.bulkUpdateFieldSearch.toLowerCase();
+            fields = fields.filter(f =>
+                f.label.toLowerCase().includes(q) || f.apiName.toLowerCase().includes(q)
+            );
+        }
+        return fields.slice(0, 30);
+    }
+
+    get isBulkUpdatePicklist() {
+        const f = this.bulkUpdateSelectedField;
+        return f && (f.type === 'PICKLIST' || f.type === 'MULTIPICKLIST');
+    }
+
+    get isBulkUpdateBoolean() {
+        const f = this.bulkUpdateSelectedField;
+        return f && f.type === 'BOOLEAN';
+    }
+
+    get isBulkUpdateNumber() {
+        const f = this.bulkUpdateSelectedField;
+        return f && (f.type === 'DOUBLE' || f.type === 'CURRENCY' || f.type === 'PERCENT' || f.type === 'INTEGER');
+    }
+
+    get isBulkUpdateDate() {
+        const f = this.bulkUpdateSelectedField;
+        return f && (f.type === 'DATE' || f.type === 'DATETIME');
+    }
+
+    get isBulkUpdateText() {
+        return this.bulkUpdateSelectedField
+            && !this.isBulkUpdatePicklist
+            && !this.isBulkUpdateBoolean
+            && !this.isBulkUpdateNumber
+            && !this.isBulkUpdateDate;
+    }
+
+    get bulkUpdatePicklistValues() {
+        const f = this.bulkUpdateSelectedField;
+        return f && f.picklistValues ? f.picklistValues : [];
+    }
+
+    get bulkUpdateBooleanValue() {
+        return this.bulkUpdateFieldValue === 'true';
+    }
+
+    handleBulkUpdateClick() {
+        this.bulkUpdatePickerOpen = !this.bulkUpdatePickerOpen;
+        if (!this.bulkUpdatePickerOpen) {
+            this.bulkUpdateSelectedField = null;
+            this.bulkUpdateFieldSearch = '';
+            this.bulkUpdateFieldValue = '';
+        }
+    }
+
+    handleBulkUpdateFieldSearch(event) {
+        this.bulkUpdateFieldSearch = event.target.value;
+    }
+
+    handleBulkUpdateFieldSelect(event) {
+        const apiName = event.currentTarget.dataset.apiName;
+        const field = this.accountFieldDescribe.find(f => f.apiName === apiName);
+        if (!field) return;
+        this.bulkUpdateSelectedField = field;
+        this.bulkUpdateFieldValue = '';
+    }
+
+    handleBulkUpdateFieldClear() {
+        this.bulkUpdateSelectedField = null;
+        this.bulkUpdateFieldSearch = '';
+        this.bulkUpdateFieldValue = '';
+    }
+
+    handleBulkUpdateValueChange(event) {
+        this.bulkUpdateFieldValue = event.target.value != null ? String(event.target.value) : '';
+    }
+
+    handleBulkUpdateToggle(event) {
+        this.bulkUpdateFieldValue = event.target.checked ? 'true' : 'false';
+    }
+
+    handleBulkUpdateClose() {
+        this.bulkUpdatePickerOpen = false;
+        this.bulkUpdateSelectedField = null;
+        this.bulkUpdateFieldSearch = '';
+        this.bulkUpdateFieldValue = '';
+    }
+
+    async handleBulkUpdateApply() {
+        const field = this.bulkUpdateSelectedField;
+        if (!field) return;
+        const accountIds = [...this.selectedIds];
+        if (!accountIds.length) return;
+
+        this.isBulkUpdating = true;
+        try {
+            const result = await bulkUpdateAccountField({
+                fieldName: field.apiName,
+                fieldValue: this.bulkUpdateFieldValue,
+                accountIds,
+            });
+            if (result.ok) {
+                this.showToast('Success',
+                    `Updated ${field.label} on ${result.updated} accounts.`, 'success');
+                this.bulkUpdatePickerOpen = false;
+                this.bulkUpdateSelectedField = null;
+                this.bulkUpdateFieldSearch = '';
+                this.bulkUpdateFieldValue = '';
+                this.selectedIds = new Set();
+                this._invalidateCaches();
+                await refreshApex(this._wiredAccountResult);
+            } else {
+                this.showToast('Warning',
+                    `Partial update with errors: ${result.errors.join('; ')}`, 'warning');
+            }
+        } catch (error) {
+            this.showToast('Error', 'Bulk update failed: ' + this.reduceErrors(error), 'error');
+        } finally {
+            this.isBulkUpdating = false;
+        }
+    }
+
+    // ─── Dynamic Field Pickers ────────────────────────────────────────────
 
     get filteredFieldDescribe() {
         const existingFields = new Set([
@@ -1060,7 +1497,14 @@ export default class AbxTierReview extends LightningElement {
     }
 
     // Close filter panel, AE dropdown, and bulk picker when clicking outside
+    // Guarded: exits immediately if nothing is open (avoids DOM queries on every click)
     handleBodyClick(event) {
+        if (!this.filterPanelOpen && !this.activeAEDropdownId && !this.bulkAEPickerOpen
+            && !this.showDynamicFieldPicker && !this.showDetailFieldPicker
+            && !this.bulkUpdatePickerOpen) {
+            return;
+        }
+
         const path = event.composedPath();
 
         if (this.filterPanelOpen) {
@@ -1077,7 +1521,15 @@ export default class AbxTierReview extends LightningElement {
             const aeWrappers = this.template.querySelectorAll('.ae-combobox-wrapper');
             const clickedAE = Array.from(aeWrappers).some(w => path.includes(w));
             if (!clickedAE) {
+                const closingId = this.activeAEDropdownId;
                 this.activeAEDropdownId = null;
+                // Clear search term and pending assignment for the row being closed
+                const newTerms = { ...this.aeSearchTerms };
+                delete newTerms[closingId];
+                this.aeSearchTerms = newTerms;
+                const newAssign = { ...this.aeAssignments };
+                delete newAssign[closingId];
+                this.aeAssignments = newAssign;
             }
         }
 
@@ -1107,6 +1559,18 @@ export default class AbxTierReview extends LightningElement {
                 this.showDetailFieldPicker = false;
             }
         }
+
+        if (this.bulkUpdatePickerOpen) {
+            const updatePanel = this.template.querySelector('.bulk-update-panel');
+            const updateBtn = this.template.querySelector('.bulk-update-btn');
+            const clickedUpdate = (updatePanel && path.includes(updatePanel)) || (updateBtn && path.includes(updateBtn));
+            if (!clickedUpdate) {
+                this.bulkUpdatePickerOpen = false;
+                this.bulkUpdateSelectedField = null;
+                this.bulkUpdateFieldSearch = '';
+                this.bulkUpdateFieldValue = '';
+            }
+        }
     }
 
     connectedCallback() {
@@ -1117,9 +1581,10 @@ export default class AbxTierReview extends LightningElement {
 
     disconnectedCallback() {
         document.removeEventListener('click', this._bodyClickHandler);
+        clearTimeout(this._searchTimer);
     }
 
-    // ─── Utilities ────────────────────────────────────────────────────────────
+    // ─── Utilities ────────────────────────────────────────────────────────
 
     showToast(title, message, variant) {
         this.dispatchEvent(new ShowToastEvent({ title, message, variant }));

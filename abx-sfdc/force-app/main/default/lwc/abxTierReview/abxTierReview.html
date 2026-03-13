@@ -120,42 +120,158 @@
                                         ></lightning-button>
                                     </lightning-button-group>
                                 </template>
-                                <!-- Bulk AE Assignment -->
-                                <div class="slds-is-relative slds-m-left_x-small">
-                                    <lightning-button
-                                        label="Assign AE"
-                                        icon-name="utility:user"
-                                        variant="neutral"
-                                        onclick={handleBulkAEClick}
-                                        class="bulk-ae-btn"
-                                    ></lightning-button>
-                                    <template if:true={bulkAEPickerOpen}>
-                                        <div class="ae-bulk-panel slds-box slds-theme_default">
-                                            <p class="slds-text-body_small slds-m-bottom_x-small">
-                                                Assign AE to <strong>{selectedCount}</strong> selected accounts:
-                                            </p>
-                                            <input
-                                                type="text"
-                                                class="slds-input slds-m-bottom_x-small"
-                                                placeholder="Search AE users…"
-                                                value={bulkAESearchTerm}
-                                                oninput={handleBulkAESearch}
-                                            />
-                                            <div class="ae-bulk-list">
-                                                <template for:each={filteredBulkAEUsers} for:item="aeUser">
-                                                    <div
-                                                        key={aeUser.userId}
-                                                        class="ae-dropdown-item"
-                                                        data-user-id={aeUser.userId}
-                                                        onclick={handleBulkAESelect}
-                                                    >
-                                                        {aeUser.name}
+                                <!-- Bulk AE Assignment (No AE view only) -->
+                                <template if:true={isUnassignedAEFilter}>
+                                    <div class="slds-is-relative slds-m-left_x-small">
+                                        <lightning-button
+                                            label="Assign AE"
+                                            icon-name="utility:user"
+                                            variant="neutral"
+                                            onclick={handleBulkAEClick}
+                                            class="bulk-ae-btn"
+                                        ></lightning-button>
+                                        <template if:true={bulkAEPickerOpen}>
+                                            <div class="ae-bulk-panel slds-box slds-theme_default">
+                                                <p class="slds-text-body_small slds-m-bottom_x-small">
+                                                    Assign AE to <strong>{selectedCount}</strong> selected accounts:
+                                                </p>
+                                                <input
+                                                    type="text"
+                                                    class="slds-input slds-m-bottom_x-small"
+                                                    placeholder="Search AE users…"
+                                                    value={bulkAESearchTerm}
+                                                    oninput={handleBulkAESearch}
+                                                />
+                                                <div class="ae-bulk-list">
+                                                    <template for:each={filteredBulkAEUsers} for:item="aeUser">
+                                                        <div
+                                                            key={aeUser.userId}
+                                                            class="ae-dropdown-item"
+                                                            data-user-id={aeUser.userId}
+                                                            onclick={handleBulkAESelect}
+                                                        >
+                                                            {aeUser.name}
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <!-- Bulk Field Update (Current ABX view only) -->
+                                <template if:true={isCurrentABXFilter}>
+                                    <div class="slds-is-relative slds-m-left_x-small">
+                                        <lightning-button
+                                            label="Update Field"
+                                            icon-name="utility:edit"
+                                            variant="neutral"
+                                            onclick={handleBulkUpdateClick}
+                                            class="bulk-update-btn"
+                                        ></lightning-button>
+                                        <template if:true={bulkUpdatePickerOpen}>
+                                            <div class="bulk-update-panel slds-box slds-theme_default">
+                                                <p class="slds-text-body_small slds-m-bottom_x-small">
+                                                    Update <strong>{selectedCount}</strong> selected accounts:
+                                                </p>
+                                                <!-- Step 1: Field selection -->
+                                                <template if:false={bulkUpdateSelectedField}>
+                                                    <input
+                                                        type="text"
+                                                        class="slds-input slds-m-bottom_x-small"
+                                                        placeholder="Search fields…"
+                                                        value={bulkUpdateFieldSearch}
+                                                        oninput={handleBulkUpdateFieldSearch}
+                                                    />
+                                                    <div class="bulk-update-field-list">
+                                                        <template for:each={filteredUpdateFields} for:item="uf">
+                                                            <div
+                                                                key={uf.apiName}
+                                                                class="bulk-update-field-item"
+                                                                data-api-name={uf.apiName}
+                                                                onclick={handleBulkUpdateFieldSelect}
+                                                            >
+                                                                <span class="dynamic-field-item__label">{uf.label}</span>
+                                                                <span class="dynamic-field-item__api">{uf.apiName}</span>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <!-- Step 2: Value input -->
+                                                <template if:true={bulkUpdateSelectedField}>
+                                                    <p class="slds-text-body_small slds-m-bottom_xx-small">
+                                                        Field: <strong>{bulkUpdateSelectedField.label}</strong>
+                                                        <span class="bulk-update-field-change" onclick={handleBulkUpdateFieldClear}>(change)</span>
+                                                    </p>
+                                                    <!-- Picklist -->
+                                                    <template if:true={isBulkUpdatePicklist}>
+                                                        <select class="slds-select slds-m-bottom_x-small" onchange={handleBulkUpdateValueChange}>
+                                                            <option value="">-- Select --</option>
+                                                            <template for:each={bulkUpdatePicklistValues} for:item="pv">
+                                                                <option key={pv} value={pv}>{pv}</option>
+                                                            </template>
+                                                        </select>
+                                                    </template>
+                                                    <!-- Boolean -->
+                                                    <template if:true={isBulkUpdateBoolean}>
+                                                        <lightning-input
+                                                            type="toggle"
+                                                            label="Value"
+                                                            checked={bulkUpdateBooleanValue}
+                                                            onchange={handleBulkUpdateToggle}
+                                                            class="slds-m-bottom_x-small"
+                                                        ></lightning-input>
+                                                    </template>
+                                                    <!-- Number types -->
+                                                    <template if:true={isBulkUpdateNumber}>
+                                                        <lightning-input
+                                                            type="number"
+                                                            label="Value"
+                                                            value={bulkUpdateFieldValue}
+                                                            onchange={handleBulkUpdateValueChange}
+                                                            variant="label-hidden"
+                                                            class="slds-m-bottom_x-small"
+                                                        ></lightning-input>
+                                                    </template>
+                                                    <!-- Date -->
+                                                    <template if:true={isBulkUpdateDate}>
+                                                        <lightning-input
+                                                            type="date"
+                                                            label="Value"
+                                                            value={bulkUpdateFieldValue}
+                                                            onchange={handleBulkUpdateValueChange}
+                                                            variant="label-hidden"
+                                                            class="slds-m-bottom_x-small"
+                                                        ></lightning-input>
+                                                    </template>
+                                                    <!-- Text / fallback -->
+                                                    <template if:true={isBulkUpdateText}>
+                                                        <lightning-input
+                                                            type="text"
+                                                            label="Value"
+                                                            value={bulkUpdateFieldValue}
+                                                            onchange={handleBulkUpdateValueChange}
+                                                            variant="label-hidden"
+                                                            class="slds-m-bottom_x-small"
+                                                        ></lightning-input>
+                                                    </template>
+                                                    <div class="slds-grid slds-grid_align-end slds-m-top_xx-small">
+                                                        <lightning-button
+                                                            label="Cancel"
+                                                            onclick={handleBulkUpdateClose}
+                                                            class="slds-m-right_xx-small"
+                                                        ></lightning-button>
+                                                        <lightning-button
+                                                            label="Apply"
+                                                            variant="brand"
+                                                            onclick={handleBulkUpdateApply}
+                                                            disabled={isBulkUpdating}
+                                                        ></lightning-button>
                                                     </div>
                                                 </template>
                                             </div>
-                                        </div>
-                                    </template>
-                                </div>
+                                        </template>
+                                    </div>
+                                </template>
                             </template>
                         </div>
                         <div class="slds-col slds-grid slds-grid_vertical-align-center">
@@ -369,8 +485,11 @@
                                     <template if:true={row.segment}>
                                         <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Segment:</strong> {row.segment}</p>
                                     </template>
+                                    <template if:true={row.hasAE}>
+                                        <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Account Executive:</strong> {row.accountExecutiveName}</p>
+                                    </template>
                                     <template if:true={row.hasDevOwner}>
-                                        <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Account Dev Owner:</strong> {row.accountDevOwnerName}</p>
+                                        <p class="slds-text-body_small slds-m-top_xxx-small"><strong>SDR:</strong> {row.accountDevOwnerName}</p>
                                     </template>
 
                                     <!-- Dynamic Detail Fields -->

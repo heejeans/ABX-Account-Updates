@@ -188,6 +188,9 @@ public class ABXTierService {
         if (acct.Sales_Segment__c == 'Commercial' || acct.Sales_Segment__c == 'Mid-Market') {
             reasons.add('Sales segment is ' + acct.Sales_Segment__c + ' (excluded from ABX targeting)');
         }
+        if (acct.Type != 'Standard') {
+            reasons.add('Account type is ' + (acct.Type != null ? acct.Type : '(blank)') + ' (must be Standard for ABX targeting)');
+        }
 
         return reasons;
     }
@@ -198,17 +201,22 @@ public class ABXTierService {
     private static MatrixResult calcTierFromMatrix(Account acct) {
         Double fit = (acct.Fit_Score_Total__c != null) ? acct.Fit_Score_Total__c : -1;
         Boolean isDnn = (acct.Marketplace_Prospect__c == true);
+        Boolean isAiTarget = (acct.AI_Target_Account_Tier__c != null && acct.AI_Target_Account_Tier__c != '');
         String intentLevel = classifyIntent(acct.Account_Intent__c);
 
         MatrixResult result = new MatrixResult();
 
         // Below minimum threshold
         if (fit < 5) {
-            if (isDnn) {
+            if (isDnn || isAiTarget) {
+                List<String> overrideLabels = new List<String>();
+                if (isDnn) overrideLabels.add('DNN/Marketplace Prospect');
+                if (isAiTarget) overrideLabels.add('AI Target Account (tier: ' + acct.AI_Target_Account_Tier__c + ')');
+                String overrideLabel = String.join(overrideLabels, ' + ');
                 result.tier = 2;
-                result.reason = 'DNN/Marketplace Prospect with fit score '
+                result.reason = overrideLabel + ' with fit score '
                     + (fit < 0 ? '(missing)' : String.valueOf(fit))
-                    + ' (below threshold) → Tier 2 (DNN minimum)';
+                    + ' (below threshold) → Tier 2 (minimum override)';
                 return result;
             }
             result.tier = null;
@@ -240,9 +248,13 @@ public class ABXTierService {
                 tier = 3;
                 matrixReason = 'Fit score ' + fit + ' (9-10 range) + Medium intent → Tier 3';
             } else {
-                if (isDnn) {
+                if (isDnn || isAiTarget) {
+                    List<String> overrideLabels = new List<String>();
+                    if (isDnn) overrideLabels.add('DNN/Marketplace Prospect');
+                    if (isAiTarget) overrideLabels.add('AI Target Account (tier: ' + acct.AI_Target_Account_Tier__c + ')');
+                    String overrideLabel = String.join(overrideLabels, ' + ');
                     result.tier = 2;
-                    result.reason = 'DNN/Marketplace Prospect: fit score ' + fit + ' (9-10 range) + Low intent → Tier 2 (DNN minimum)';
+                    result.reason = overrideLabel + ': fit score ' + fit + ' (9-10 range) + Low intent → Tier 2 (minimum override)';
                     return result;
                 }
                 result.tier = null;
@@ -254,9 +266,13 @@ public class ABXTierService {
                 tier = 3;
                 matrixReason = 'Fit score ' + fit + ' (5-8 range) + High intent → Tier 3';
             } else {
-                if (isDnn) {
+                if (isDnn || isAiTarget) {
+                    List<String> overrideLabels = new List<String>();
+                    if (isDnn) overrideLabels.add('DNN/Marketplace Prospect');
+                    if (isAiTarget) overrideLabels.add('AI Target Account (tier: ' + acct.AI_Target_Account_Tier__c + ')');
+                    String overrideLabel = String.join(overrideLabels, ' + ');
                     result.tier = 2;
-                    result.reason = 'DNN/Marketplace Prospect: fit score ' + fit + ' (5-8 range) + ' + intentLevel + ' intent → Tier 2 (DNN minimum)';
+                    result.reason = overrideLabel + ': fit score ' + fit + ' (5-8 range) + ' + intentLevel + ' intent → Tier 2 (minimum override)';
                     return result;
                 }
                 result.tier = null;
@@ -265,9 +281,12 @@ public class ABXTierService {
             }
         }
 
-        // DNN override: minimum Tier 2
-        if (isDnn && tier != null && tier > 2) {
-            matrixReason += '. Upgraded to Tier 2 (minimum) because account is a DNN/Marketplace Prospect';
+        // DNN / AI Target override: minimum Tier 2
+        if ((isDnn || isAiTarget) && tier != null && tier > 2) {
+            List<String> overrideLabels = new List<String>();
+            if (isDnn) overrideLabels.add('DNN/Marketplace Prospect');
+            if (isAiTarget) overrideLabels.add('AI Target Account (tier: ' + acct.AI_Target_Account_Tier__c + ')');
+            matrixReason += '. Upgraded to Tier 2 (minimum) because account is ' + String.join(overrideLabels, ' + ');
             tier = 2;
         }
 

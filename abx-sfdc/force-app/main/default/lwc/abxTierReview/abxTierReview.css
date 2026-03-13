@@ -342,3 +342,44 @@
 .dynamic-detail-remove:hover {
     color: #dc2626;
 }
+
+/* ── Bulk Update Panel ──────────────────────────────────────────────── */
+
+.bulk-update-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 200;
+    width: 320px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+    border-radius: 8px;
+    margin-top: 4px;
+    padding: 12px;
+}
+
+.bulk-update-field-list {
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.bulk-update-field-item {
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.1s;
+}
+
+.bulk-update-field-item:hover {
+    background: #eff6ff;
+}
+
+.bulk-update-field-change {
+    color: #2563eb;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 4px;
+}
+
+.bulk-update-field-change:hover {
+    text-decoration: underline;
+}

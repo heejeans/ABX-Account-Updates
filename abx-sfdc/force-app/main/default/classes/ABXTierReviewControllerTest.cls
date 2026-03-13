@@ -376,4 +376,104 @@ private class ABXTierReviewControllerTest {
 
         System.assert(result.isEmpty(), 'Should be empty for empty inputs');
     }
+
+    // ─── bulkUpdateAccountField tests ───────────────────────────────────────────
+
+    @isTest
+    static void testBulkUpdateAccountField_TextFieldSuccess() {
+        Account testAcct = [SELECT Id, Name FROM Account WHERE Name = 'Test Tiered Enterprise' LIMIT 1];
+
+        Test.startTest();
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
+            'Name', 'Updated Enterprise Name', new List<String>{ testAcct.Id }
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, result.ok, 'Should succeed: ' + result.errors);
+        System.assertEquals(1, result.updated, 'Should update 1 account');
+
+        Account updated = [SELECT Name FROM Account WHERE Id = :testAcct.Id];
+        System.assertEquals('Updated Enterprise Name', updated.Name, 'Name should be updated');
+    }
+
+    @isTest
+    static void testBulkUpdateAccountField_PicklistFieldSuccess() {
+        Account testAcct = [SELECT Id FROM Account WHERE Name = 'Test Tiered Enterprise' LIMIT 1];
+
+        Test.startTest();
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
+            'Account_Intent__c', 'Medium', new List<String>{ testAcct.Id }
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, result.ok, 'Should succeed: ' + result.errors);
+        System.assertEquals(1, result.updated, 'Should update 1 account');
+
+        Account updated = [SELECT Account_Intent__c FROM Account WHERE Id = :testAcct.Id];
+        System.assertEquals('Medium', updated.Account_Intent__c, 'Intent should be updated');
+    }
+
+    @isTest
+    static void testBulkUpdateAccountField_NonexistentField() {
+        Account testAcct = [SELECT Id FROM Account LIMIT 1];
+
+        Test.startTest();
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
+            'Not_A_Real_Field__c', 'value', new List<String>{ testAcct.Id }
+        );
+        Test.stopTest();
+
+        System.assertEquals(false, result.ok, 'Should fail for invalid field');
+        System.assert(result.errors.size() > 0, 'Should have errors');
+    }
+
+    @isTest
+    static void testBulkUpdateAccountField_ClearValue() {
+        Account testAcct = [SELECT Id FROM Account WHERE Name = 'Test Tiered Enterprise' LIMIT 1];
+
+        Test.startTest();
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
+            'Account_Intent__c', '', new List<String>{ testAcct.Id }
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, result.ok, 'Should succeed clearing value: ' + result.errors);
+        Account updated = [SELECT Account_Intent__c FROM Account WHERE Id = :testAcct.Id];
+        System.assertEquals(null, updated.Account_Intent__c, 'Intent should be cleared');
+    }
+
+    @isTest
+    static void testBulkUpdateAccountField_BulkMultipleAccounts() {
+        List<Account> accounts = [SELECT Id FROM Account];
+
+        Test.startTest();
+        List<String> ids = new List<String>();
+        for (Account a : accounts) {
+            ids.add(a.Id);
+        }
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
+            'Account_Intent__c', 'Low', ids
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, result.ok, 'Should succeed: ' + result.errors);
+        System.assertEquals(accounts.size(), result.updated, 'Should update all accounts');
+    }
+
+    @isTest
+    static void testGetAccountFieldDescribe_IncludesUpdateableAndPicklist() {
+        Test.startTest();
+        List<ABXTierReviewController.FieldDescribeResult> fields =
+            ABXTierReviewController.getAccountFieldDescribe();
+        Test.stopTest();
+
+        Boolean foundUpdateable = false;
+        Boolean foundPicklistValues = false;
+        for (ABXTierReviewController.FieldDescribeResult f : fields) {
+            if (f.isUpdateable != null && f.isUpdateable) foundUpdateable = true;
+            if (f.picklistValues != null && !f.picklistValues.isEmpty()) foundPicklistValues = true;
+        }
+        System.assert(foundUpdateable, 'Should have at least one updateable field');
+        System.assert(foundPicklistValues, 'Should have at least one field with picklist values');
+    }
 }

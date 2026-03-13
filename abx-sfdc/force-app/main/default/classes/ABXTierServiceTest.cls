@@ -9,6 +9,7 @@ private class ABXTierServiceTest {
     private static Account buildAccount(Map<String, Object> overrides) {
         Map<String, Object> defaults = new Map<String, Object>{
             'Name' => 'Test Account',
+            'Type' => 'Standard',
             'Account_Stage__c' => 'Prospect',
             'Sales_Segment__c' => 'Enterprise',
             'Company_isDefunct__c' => 'false',
@@ -151,6 +152,41 @@ private class ABXTierServiceTest {
         ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
         System.assertEquals('Ignore', eval.action);
         System.assert(eval.reason.contains('Mid-Market'), 'Reason should mention Mid-Market');
+    }
+
+    @isTest
+    static void testExclusion_AccountTypeNotStandard() {
+        Account a = buildAccount(new Map<String, Object>{
+            'Type' => 'Partner'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Ignore', eval.action);
+        System.assert(eval.reason.contains('must be Standard'), 'Reason should mention must be Standard');
+    }
+
+    @isTest
+    static void testExclusion_AccountTypeNull() {
+        Account a = buildAccount(new Map<String, Object>{
+            'Type' => null
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Ignore', eval.action);
+        System.assert(eval.reason.contains('(blank)'), 'Reason should mention blank type');
+    }
+
+    @isTest
+    static void testExclusion_AccountTypeStandard_NotExcluded() {
+        Account a = buildAccount(new Map<String, Object>{
+            'Type' => 'Standard',
+            'Fit_Score_Total__c' => 12,
+            'Account_Intent__c' => 'High'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertNotEquals('Ignore', eval.action, 'Standard type should not be excluded');
+        System.assert(!eval.reason.contains('Account type'), 'Should not mention account type exclusion');
     }
 
     // ─── Closed Lost routing tests ───────────────────────────────────────────────
@@ -368,6 +404,102 @@ private class ABXTierServiceTest {
         ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
         System.assertEquals('Add', eval.action);
         System.assertEquals('Tier 1', eval.recommendedTier);
+    }
+
+    // ─── AI Target Account Tier override tests ─────────────────────────────────
+
+    @isTest
+    static void testAITarget_BelowThreshold_Tier2() {
+        Account a = buildAccount(new Map<String, Object>{
+            'AI_Target_Account_Tier__c' => 'Tier 1',
+            'Fit_Score_Total__c' => 3,
+            'Account_Intent__c' => 'Low'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Add', eval.action);
+        System.assertEquals('Tier 2', eval.recommendedTier);
+        System.assert(eval.reason.contains('AI Target Account'), 'Should mention AI Target Account');
+    }
+
+    @isTest
+    static void testAITarget_MidFitLowIntent_Tier2() {
+        Account a = buildAccount(new Map<String, Object>{
+            'AI_Target_Account_Tier__c' => 'Tier 2',
+            'Fit_Score_Total__c' => 9,
+            'Account_Intent__c' => 'Low'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Add', eval.action);
+        System.assertEquals('Tier 2', eval.recommendedTier);
+        System.assert(eval.reason.contains('AI Target Account'), 'Should mention AI Target Account');
+    }
+
+    @isTest
+    static void testAITarget_UpgradeTier3ToTier2() {
+        Account a = buildAccount(new Map<String, Object>{
+            'AI_Target_Account_Tier__c' => 'Tier 1',
+            'Fit_Score_Total__c' => 7,
+            'Account_Intent__c' => 'High'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Add', eval.action);
+        System.assertEquals('Tier 2', eval.recommendedTier);
+        System.assert(eval.reason.contains('Upgraded to Tier 2'), 'Should mention upgrade');
+        System.assert(eval.reason.contains('AI Target Account'), 'Should mention AI Target Account');
+    }
+
+    @isTest
+    static void testAITarget_HighFitHighIntent_StaysTier1() {
+        Account a = buildAccount(new Map<String, Object>{
+            'AI_Target_Account_Tier__c' => 'Tier 1',
+            'Fit_Score_Total__c' => 12,
+            'Account_Intent__c' => 'High'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Add', eval.action);
+        System.assertEquals('Tier 1', eval.recommendedTier);
+    }
+
+    @isTest
+    static void testAITarget_StillExcluded_CommercialSegment() {
+        Account a = buildAccount(new Map<String, Object>{
+            'AI_Target_Account_Tier__c' => 'Tier 2',
+            'Sales_Segment__c' => 'Commercial',
+            'Fit_Score_Total__c' => 6,
+            'Account_Intent__c' => 'Low'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Ignore', eval.action, 'AI Target should not bypass exclusion rules');
+    }
+
+    @isTest
+    static void testAITarget_StillExcluded_NonStandardType() {
+        Account a = buildAccount(new Map<String, Object>{
+            'AI_Target_Account_Tier__c' => 'Tier 1',
+            'Type' => 'Partner',
+            'Fit_Score_Total__c' => 3,
+            'Account_Intent__c' => 'Low'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Ignore', eval.action, 'AI Target should not bypass exclusion rules');
+    }
+
+    @isTest
+    static void testAITarget_NoValue_NoOverride() {
+        Account a = buildAccount(new Map<String, Object>{
+            'Fit_Score_Total__c' => 3,
+            'Account_Intent__c' => 'Low'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Ignore', eval.action);
+        System.assertEquals(null, eval.recommendedTier);
     }
 
     // ─── Action determination tests ──────────────────────────────────────────────
