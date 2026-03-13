@@ -532,7 +532,8 @@
                                         </template>
                                     </div>
 
-                                    <!-- AE Assignment -->
+                                    <!-- AE Assignment (hidden in Add/Remove/Reclassify views) -->
+                                    <template if:false={isActionableFilter}>
                                     <div class="ae-assignment-section">
                                         <div class="slds-grid slds-grid_vertical-align-end slds-wrap">
                                             <div class="slds-col">
@@ -588,6 +589,7 @@
                                             </template>
                                         </div>
                                     </div>
+                                    </template>
                                 </div>
                             </div>
                         </template>
