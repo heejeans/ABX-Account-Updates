@@ -894,6 +894,10 @@ export default class AbxTierReview extends LightningElement {
         return this.activeFilter === 'Current ABX';
     }
 
+    get showInlineAESection() {
+        return this.isCurrentABXFilter || this.isUnassignedAEFilter;
+    }
+
     get showSelectAll() {
         return this.isActionableFilter || this.isUnassignedAEFilter || this.isCurrentABXFilter;
     }
