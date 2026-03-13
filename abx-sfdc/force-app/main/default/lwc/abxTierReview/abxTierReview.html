@@ -122,13 +122,12 @@
                                 </template>
                                 <!-- Bulk AE Assignment (No AE view only) -->
                                 <template if:true={isUnassignedAEFilter}>
-                                    <div class="slds-is-relative slds-m-left_x-small">
+                                    <div class="slds-is-relative slds-m-left_x-small bulk-ae-btn">
                                         <lightning-button
                                             label="Assign AE"
                                             icon-name="utility:user"
                                             variant="neutral"
                                             onclick={handleBulkAEClick}
-                                            class="bulk-ae-btn"
                                         ></lightning-button>
                                         <template if:true={bulkAEPickerOpen}>
                                             <div class="ae-bulk-panel slds-box slds-theme_default">
@@ -160,13 +159,12 @@
                                 </template>
                                 <!-- Bulk Field Update (Current ABX view only) -->
                                 <template if:true={isCurrentABXFilter}>
-                                    <div class="slds-is-relative slds-m-left_x-small">
+                                    <div class="slds-is-relative slds-m-left_x-small bulk-update-btn">
                                         <lightning-button
                                             label="Update Field"
                                             icon-name="utility:edit"
                                             variant="neutral"
                                             onclick={handleBulkUpdateClick}
-                                            class="bulk-update-btn"
                                         ></lightning-button>
                                         <template if:true={bulkUpdatePickerOpen}>
                                             <div class="bulk-update-panel slds-box slds-theme_default">
@@ -276,13 +274,12 @@
                         </div>
                         <div class="slds-col slds-grid slds-grid_vertical-align-center">
                             <!-- Field Filter button -->
-                            <div class="slds-is-relative slds-m-right_x-small">
+                            <div class="slds-is-relative slds-m-right_x-small filter-toggle-btn">
                                 <lightning-button
                                     label={filterButtonLabel}
                                     icon-name="utility:filterList"
                                     variant={filterButtonVariant}
                                     onclick={handleToggleFilterPanel}
-                                    class="filter-toggle-btn"
                                 ></lightning-button>
                                 <template if:true={hasActiveFieldFilters}>
                                     <lightning-button

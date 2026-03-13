@@ -1496,8 +1496,9 @@ export default class AbxTierReview extends LightningElement {
         }
     }
 
-    // Close filter panel, AE dropdown, and bulk picker when clicking outside
-    // Guarded: exits immediately if nothing is open (avoids DOM queries on every click)
+    // Close filter panel, AE dropdown, and bulk picker when clicking outside.
+    // Uses CSS class matching on composedPath() — reliable across LWC shadow DOM
+    // (element reference comparison via path.includes(el) is unreliable in LWC).
     handleBodyClick(event) {
         if (!this.filterPanelOpen && !this.activeAEDropdownId && !this.bulkAEPickerOpen
             && !this.showDynamicFieldPicker && !this.showDetailFieldPicker
@@ -1507,20 +1508,19 @@ export default class AbxTierReview extends LightningElement {
 
         const path = event.composedPath();
 
+        // Helper: check if any element in the composed path has a given CSS class
+        const clickedOn = (cls) => path.some(
+            el => el.classList && el.classList.contains(cls)
+        );
+
         if (this.filterPanelOpen) {
-            const panel = this.template.querySelector('.filter-panel');
-            const btn = this.template.querySelector('.filter-toggle-btn');
-            const clickedPanel = panel && path.includes(panel);
-            const clickedBtn = btn && path.includes(btn);
-            if (!clickedPanel && !clickedBtn) {
+            if (!clickedOn('filter-panel') && !clickedOn('filter-toggle-btn')) {
                 this.filterPanelOpen = false;
             }
         }
 
         if (this.activeAEDropdownId) {
-            const aeWrappers = this.template.querySelectorAll('.ae-combobox-wrapper');
-            const clickedAE = Array.from(aeWrappers).some(w => path.includes(w));
-            if (!clickedAE) {
+            if (!clickedOn('ae-combobox-wrapper') && !clickedOn('ae-assignment-section')) {
                 const closingId = this.activeAEDropdownId;
                 this.activeAEDropdownId = null;
                 // Clear search term and pending assignment for the row being closed
@@ -1534,37 +1534,25 @@ export default class AbxTierReview extends LightningElement {
         }
 
         if (this.bulkAEPickerOpen) {
-            const bulkPanel = this.template.querySelector('.ae-bulk-panel');
-            const bulkBtn = this.template.querySelector('.bulk-ae-btn');
-            const clickedBulk = (bulkPanel && path.includes(bulkPanel)) || (bulkBtn && path.includes(bulkBtn));
-            if (!clickedBulk) {
+            if (!clickedOn('ae-bulk-panel') && !clickedOn('bulk-ae-btn')) {
                 this.bulkAEPickerOpen = false;
             }
         }
 
         if (this.showDynamicFieldPicker) {
-            const dynPicker = this.template.querySelector('.dynamic-field-picker');
-            const addBtn = this.template.querySelector('.filter-cat--add');
-            const clickedDyn = (dynPicker && path.includes(dynPicker)) || (addBtn && path.includes(addBtn));
-            if (!clickedDyn) {
+            if (!clickedOn('dynamic-field-picker') && !clickedOn('filter-cat--add')) {
                 this.showDynamicFieldPicker = false;
             }
         }
 
         if (this.showDetailFieldPicker) {
-            const detPicker = this.template.querySelector('.detail-field-picker');
-            const detBtn = this.template.querySelector('.detail-add-field-btn');
-            const clickedDet = (detPicker && path.includes(detPicker)) || (detBtn && path.includes(detBtn));
-            if (!clickedDet) {
+            if (!clickedOn('detail-field-picker') && !clickedOn('detail-add-field-btn')) {
                 this.showDetailFieldPicker = false;
             }
         }
 
         if (this.bulkUpdatePickerOpen) {
-            const updatePanel = this.template.querySelector('.bulk-update-panel');
-            const updateBtn = this.template.querySelector('.bulk-update-btn');
-            const clickedUpdate = (updatePanel && path.includes(updatePanel)) || (updateBtn && path.includes(updateBtn));
-            if (!clickedUpdate) {
+            if (!clickedOn('bulk-update-panel') && !clickedOn('bulk-update-btn')) {
                 this.bulkUpdatePickerOpen = false;
                 this.bulkUpdateSelectedField = null;
                 this.bulkUpdateFieldSearch = '';
