@@ -487,10 +487,8 @@
                                     <template if:true={row.segment}>
                                         <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Segment:</strong> {row.segment}</p>
                                     </template>
-                                    <template if:true={showInlineAESection}>
-                                        <template if:true={row.hasAE}>
-                                            <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Account Executive:</strong> {row.accountExecutiveName}</p>
-                                        </template>
+                                    <template if:false={isUnassignedAEFilter}>
+                                        <p class="slds-text-body_small slds-m-top_xxx-small"><strong>Account Executive:</strong> {row.accountExecutiveName}</p>
                                     </template>
                                     <template if:true={row.hasDevOwner}>
                                         <p class="slds-text-body_small slds-m-top_xxx-small"><strong>SDR:</strong> {row.accountDevOwnerName}</p>
