@@ -377,15 +377,16 @@ private class ABXTierReviewControllerTest {
         System.assert(result.isEmpty(), 'Should be empty for empty inputs');
     }
 
-    // ─── bulkUpdateAccountField tests ───────────────────────────────────────────
+    // ─── bulkUpdateAccountFields tests ──────────────────────────────────────────
 
     @isTest
-    static void testBulkUpdateAccountField_TextFieldSuccess() {
+    static void testBulkUpdateFields_SingleFieldSuccess() {
         Account testAcct = [SELECT Id, Name FROM Account WHERE Name = 'Test Tiered Enterprise' LIMIT 1];
 
+        Map<String, String> fieldUpdates = new Map<String, String>{ 'Name' => 'Updated Enterprise Name' };
         Test.startTest();
-        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
-            'Name', 'Updated Enterprise Name', new List<String>{ testAcct.Id }
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountFields(
+            JSON.serialize(fieldUpdates), new List<String>{ testAcct.Id }
         );
         Test.stopTest();
 
@@ -397,29 +398,56 @@ private class ABXTierReviewControllerTest {
     }
 
     @isTest
-    static void testBulkUpdateAccountField_PicklistFieldSuccess() {
+    static void testBulkUpdateFields_MultipleFieldsSuccess() {
         Account testAcct = [SELECT Id FROM Account WHERE Name = 'Test Tiered Enterprise' LIMIT 1];
 
+        Map<String, String> fieldUpdates = new Map<String, String>{
+            'Name' => 'Multi-Update Test',
+            'Account_Intent__c' => 'Medium'
+        };
         Test.startTest();
-        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
-            'Account_Intent__c', 'Medium', new List<String>{ testAcct.Id }
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountFields(
+            JSON.serialize(fieldUpdates), new List<String>{ testAcct.Id }
         );
         Test.stopTest();
 
         System.assertEquals(true, result.ok, 'Should succeed: ' + result.errors);
         System.assertEquals(1, result.updated, 'Should update 1 account');
 
-        Account updated = [SELECT Account_Intent__c FROM Account WHERE Id = :testAcct.Id];
+        Account updated = [SELECT Name, Account_Intent__c FROM Account WHERE Id = :testAcct.Id];
+        System.assertEquals('Multi-Update Test', updated.Name, 'Name should be updated');
         System.assertEquals('Medium', updated.Account_Intent__c, 'Intent should be updated');
     }
 
     @isTest
-    static void testBulkUpdateAccountField_NonexistentField() {
+    static void testBulkUpdateFields_MultipleFieldsMultipleAccounts() {
+        List<Account> accounts = [SELECT Id FROM Account];
+        List<String> ids = new List<String>();
+        for (Account a : accounts) {
+            ids.add(a.Id);
+        }
+
+        Map<String, String> fieldUpdates = new Map<String, String>{
+            'Account_Intent__c' => 'Low'
+        };
+        Test.startTest();
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountFields(
+            JSON.serialize(fieldUpdates), ids
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, result.ok, 'Should succeed: ' + result.errors);
+        System.assertEquals(accounts.size(), result.updated, 'Should update all accounts');
+    }
+
+    @isTest
+    static void testBulkUpdateFields_NonexistentField() {
         Account testAcct = [SELECT Id FROM Account LIMIT 1];
 
+        Map<String, String> fieldUpdates = new Map<String, String>{ 'Not_A_Real_Field__c' => 'value' };
         Test.startTest();
-        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
-            'Not_A_Real_Field__c', 'value', new List<String>{ testAcct.Id }
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountFields(
+            JSON.serialize(fieldUpdates), new List<String>{ testAcct.Id }
         );
         Test.stopTest();
 
@@ -428,12 +456,36 @@ private class ABXTierReviewControllerTest {
     }
 
     @isTest
-    static void testBulkUpdateAccountField_ClearValue() {
+    static void testBulkUpdateFields_MixedValidAndInvalidFields() {
         Account testAcct = [SELECT Id FROM Account WHERE Name = 'Test Tiered Enterprise' LIMIT 1];
 
+        // One valid field + one invalid — valid field should still be applied
+        Map<String, String> fieldUpdates = new Map<String, String>{
+            'Name' => 'Partial Update Test',
+            'Not_A_Real_Field__c' => 'value'
+        };
         Test.startTest();
-        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
-            'Account_Intent__c', '', new List<String>{ testAcct.Id }
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountFields(
+            JSON.serialize(fieldUpdates), new List<String>{ testAcct.Id }
+        );
+        Test.stopTest();
+
+        // Should still update with the valid field but report errors for the invalid one
+        System.assertEquals(1, result.updated, 'Should update 1 account with valid field');
+        System.assert(result.errors.size() > 0, 'Should have error for invalid field');
+
+        Account updated = [SELECT Name FROM Account WHERE Id = :testAcct.Id];
+        System.assertEquals('Partial Update Test', updated.Name, 'Valid field should still be updated');
+    }
+
+    @isTest
+    static void testBulkUpdateFields_ClearValue() {
+        Account testAcct = [SELECT Id FROM Account WHERE Name = 'Test Tiered Enterprise' LIMIT 1];
+
+        Map<String, String> fieldUpdates = new Map<String, String>{ 'Account_Intent__c' => '' };
+        Test.startTest();
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountFields(
+            JSON.serialize(fieldUpdates), new List<String>{ testAcct.Id }
         );
         Test.stopTest();
 
@@ -443,21 +495,31 @@ private class ABXTierReviewControllerTest {
     }
 
     @isTest
-    static void testBulkUpdateAccountField_BulkMultipleAccounts() {
-        List<Account> accounts = [SELECT Id FROM Account];
+    static void testBulkUpdateFields_InvalidJson() {
+        Account testAcct = [SELECT Id FROM Account LIMIT 1];
 
         Test.startTest();
-        List<String> ids = new List<String>();
-        for (Account a : accounts) {
-            ids.add(a.Id);
-        }
-        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountField(
-            'Account_Intent__c', 'Low', ids
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountFields(
+            'not valid json', new List<String>{ testAcct.Id }
         );
         Test.stopTest();
 
-        System.assertEquals(true, result.ok, 'Should succeed: ' + result.errors);
-        System.assertEquals(accounts.size(), result.updated, 'Should update all accounts');
+        System.assertEquals(false, result.ok, 'Should fail for invalid JSON');
+        System.assert(result.errors.size() > 0, 'Should have parse error');
+    }
+
+    @isTest
+    static void testBulkUpdateFields_EmptyMap() {
+        Account testAcct = [SELECT Id FROM Account LIMIT 1];
+
+        Test.startTest();
+        ABXTierReviewController.ApplyResult result = ABXTierReviewController.bulkUpdateAccountFields(
+            '{}', new List<String>{ testAcct.Id }
+        );
+        Test.stopTest();
+
+        System.assertEquals(false, result.ok, 'Should fail for empty updates');
+        System.assert(result.errors.size() > 0, 'Should have error message');
     }
 
     @isTest

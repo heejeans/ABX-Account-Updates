@@ -602,83 +602,93 @@ public with sharing class ABXTierReviewController {
     // ─── Bulk Update Account Field ──────────────────────────────────────────────
 
     /**
-     * Bulk update a single field on multiple Account records.
-     * Validates field accessibility and updateability via Schema describe.
-     * Type-casts the string value to the correct Apex type based on DisplayType.
+     * Bulk update multiple fields on multiple Account records.
+     * Accepts a JSON-serialized map of fieldName → fieldValue pairs.
+     * Validates each field's accessibility and updateability via Schema describe.
+     * Type-casts each string value to the correct Apex type based on DisplayType.
+     * Performs a single DML operation for all field updates across all accounts.
      */
     @AuraEnabled
-    public static ApplyResult bulkUpdateAccountField(
-        String fieldName, String fieldValue, List<String> accountIds
+    public static ApplyResult bulkUpdateAccountFields(
+        String fieldUpdatesJson, List<String> accountIds
     ) {
         List<String> errors = new List<String>();
         Integer updated = 0;
 
-        // Validate field exists and is updateable
-        Map<String, Schema.SObjectField> fieldMap = Schema.SObjectType.Account.fields.getMap();
-        String lower = fieldName.toLowerCase();
-        if (!fieldMap.containsKey(lower)) {
-            errors.add('Field not found: ' + fieldName);
-            ApplyResult result = new ApplyResult();
-            result.ok = false;
-            result.added = 0;
-            result.removed = 0;
-            result.updated = 0;
-            result.errors = errors;
-            return result;
-        }
-
-        Schema.DescribeFieldResult dfr = fieldMap.get(lower).getDescribe();
-        if (!dfr.isAccessible() || !dfr.isUpdateable()) {
-            errors.add('Field is not updateable: ' + fieldName);
-            ApplyResult result = new ApplyResult();
-            result.ok = false;
-            result.added = 0;
-            result.removed = 0;
-            result.updated = 0;
-            result.errors = errors;
-            return result;
-        }
-
-        // Type-cast the string value to the correct Apex type
-        Object typedValue;
-        Schema.DisplayType dtype = dfr.getType();
+        // Deserialize the field→value map
+        Map<String, String> fieldUpdates;
         try {
-            if (fieldValue == null || fieldValue == '') {
-                typedValue = null;
-            } else if (dtype == Schema.DisplayType.BOOLEAN) {
-                typedValue = Boolean.valueOf(fieldValue);
-            } else if (dtype == Schema.DisplayType.DOUBLE || dtype == Schema.DisplayType.CURRENCY || dtype == Schema.DisplayType.PERCENT) {
-                typedValue = Decimal.valueOf(fieldValue);
-            } else if (dtype == Schema.DisplayType.INTEGER) {
-                typedValue = Integer.valueOf(fieldValue);
-            } else if (dtype == Schema.DisplayType.DATE) {
-                typedValue = Date.valueOf(fieldValue);
-            } else if (dtype == Schema.DisplayType.DATETIME) {
-                typedValue = Datetime.valueOf(fieldValue);
-            } else {
-                typedValue = fieldValue;
-            }
+            fieldUpdates = (Map<String, String>) JSON.deserialize(fieldUpdatesJson, Map<String, String>.class);
         } catch (Exception e) {
-            errors.add('Invalid value for field type ' + String.valueOf(dtype) + ': ' + e.getMessage());
-            ApplyResult result = new ApplyResult();
-            result.ok = false;
-            result.added = 0;
-            result.removed = 0;
-            result.updated = 0;
-            result.errors = errors;
-            return result;
+            errors.add('Invalid field updates format: ' + e.getMessage());
+            return buildResult(false, 0, errors);
         }
 
-        // Query accounts and update
+        if (fieldUpdates == null || fieldUpdates.isEmpty()) {
+            errors.add('No field updates provided.');
+            return buildResult(false, 0, errors);
+        }
+
+        // Validate all fields and type-cast values up front
+        Map<String, Schema.SObjectField> fieldMap = Schema.SObjectType.Account.fields.getMap();
+        Map<String, Object> validatedFields = new Map<String, Object>(); // validName → typedValue
+
+        for (String fieldName : fieldUpdates.keySet()) {
+            String lower = fieldName.toLowerCase();
+            if (!fieldMap.containsKey(lower)) {
+                errors.add('Field not found: ' + fieldName);
+                continue;
+            }
+
+            Schema.DescribeFieldResult dfr = fieldMap.get(lower).getDescribe();
+            if (!dfr.isAccessible() || !dfr.isUpdateable()) {
+                errors.add('Field is not updateable: ' + fieldName);
+                continue;
+            }
+
+            String fieldValue = fieldUpdates.get(fieldName);
+            Object typedValue;
+            Schema.DisplayType dtype = dfr.getType();
+            try {
+                if (fieldValue == null || fieldValue == '') {
+                    typedValue = null;
+                } else if (dtype == Schema.DisplayType.BOOLEAN) {
+                    typedValue = Boolean.valueOf(fieldValue);
+                } else if (dtype == Schema.DisplayType.DOUBLE || dtype == Schema.DisplayType.CURRENCY || dtype == Schema.DisplayType.PERCENT) {
+                    typedValue = Decimal.valueOf(fieldValue);
+                } else if (dtype == Schema.DisplayType.INTEGER) {
+                    typedValue = Integer.valueOf(fieldValue);
+                } else if (dtype == Schema.DisplayType.DATE) {
+                    typedValue = Date.valueOf(fieldValue);
+                } else if (dtype == Schema.DisplayType.DATETIME) {
+                    typedValue = Datetime.valueOf(fieldValue);
+                } else {
+                    typedValue = fieldValue;
+                }
+            } catch (Exception e) {
+                errors.add('Invalid value for ' + dfr.getLabel() + ' (' + String.valueOf(dtype) + '): ' + e.getMessage());
+                continue;
+            }
+
+            validatedFields.put(dfr.getName(), typedValue);
+        }
+
+        // If no fields passed validation, return early
+        if (validatedFields.isEmpty()) {
+            return buildResult(false, 0, errors);
+        }
+
+        // Query accounts and apply all field updates
         Set<Id> idSet = new Set<Id>();
         for (String aid : accountIds) {
             idSet.add(Id.valueOf(aid));
         }
 
-        String validFieldName = dfr.getName();
         List<Account> toUpdate = new List<Account>();
         for (Account acct : [SELECT Id FROM Account WHERE Id IN :idSet]) {
-            acct.put(validFieldName, typedValue);
+            for (String validName : validatedFields.keySet()) {
+                acct.put(validName, validatedFields.get(validName));
+            }
             toUpdate.add(acct);
         }
 
@@ -695,8 +705,15 @@ public with sharing class ABXTierReviewController {
             }
         }
 
+        return buildResult(errors.isEmpty(), updated, errors);
+    }
+
+    /**
+     * Helper to build an ApplyResult consistently.
+     */
+    private static ApplyResult buildResult(Boolean ok, Integer updated, List<String> errors) {
         ApplyResult result = new ApplyResult();
-        result.ok = errors.isEmpty();
+        result.ok = ok;
         result.added = 0;
         result.removed = 0;
         result.updated = updated;

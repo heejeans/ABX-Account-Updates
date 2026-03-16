@@ -9,7 +9,7 @@ import getAEUsers from '@salesforce/apex/ABXTierReviewController.getAEUsers';
 import assignAccountExecutives from '@salesforce/apex/ABXTierReviewController.assignAccountExecutives';
 import getAccountFieldDescribe from '@salesforce/apex/ABXTierReviewController.getAccountFieldDescribe';
 import getDynamicFieldValues from '@salesforce/apex/ABXTierReviewController.getDynamicFieldValues';
-import bulkUpdateAccountField from '@salesforce/apex/ABXTierReviewController.bulkUpdateAccountField';
+import bulkUpdateAccountFields from '@salesforce/apex/ABXTierReviewController.bulkUpdateAccountFields';
 
 // Action badge CSS classes
 const ACTION_CLASSES = {
@@ -146,6 +146,7 @@ export default class AbxTierReview extends LightningElement {
     @track bulkUpdateFieldSearch = '';
     @track bulkUpdateSelectedField = null;
     @track bulkUpdateFieldValue = '';
+    @track bulkUpdateQueue = []; // Array of { apiName, label, value, displayValue }
     isBulkUpdating = false;
 
     _wiredAccountResult;
@@ -1259,7 +1260,8 @@ export default class AbxTierReview extends LightningElement {
     // ─── Bulk Field Update ──────────────────────────────────────────────
 
     get filteredUpdateFields() {
-        let fields = this.accountFieldDescribe.filter(f => f.isUpdateable);
+        const queued = new Set(this.bulkUpdateQueue.map(q => q.apiName));
+        let fields = this.accountFieldDescribe.filter(f => f.isUpdateable && !queued.has(f.apiName));
         if (this.bulkUpdateFieldSearch) {
             const q = this.bulkUpdateFieldSearch.toLowerCase();
             fields = fields.filter(f =>
@@ -1267,6 +1269,10 @@ export default class AbxTierReview extends LightningElement {
             );
         }
         return fields.slice(0, 30);
+    }
+
+    get hasBulkUpdateQueue() {
+        return this.bulkUpdateQueue.length > 0;
     }
 
     get isBulkUpdatePicklist() {
@@ -1312,6 +1318,7 @@ export default class AbxTierReview extends LightningElement {
             this.bulkUpdateSelectedField = null;
             this.bulkUpdateFieldSearch = '';
             this.bulkUpdateFieldValue = '';
+            this.bulkUpdateQueue = [];
         }
     }
 
@@ -1341,33 +1348,66 @@ export default class AbxTierReview extends LightningElement {
         this.bulkUpdateFieldValue = event.target.checked ? 'true' : 'false';
     }
 
-    handleBulkUpdateClose() {
-        this.bulkUpdatePickerOpen = false;
+    handleBulkUpdateAddToQueue() {
+        const field = this.bulkUpdateSelectedField;
+        if (!field) return;
+        // Build a display-friendly value
+        const raw = this.bulkUpdateFieldValue;
+        let displayValue = raw;
+        if (field.type === 'BOOLEAN') {
+            displayValue = raw === 'true' ? 'True' : 'False';
+        } else if (!raw) {
+            displayValue = '(empty)';
+        }
+        this.bulkUpdateQueue = [
+            ...this.bulkUpdateQueue,
+            { apiName: field.apiName, label: field.label, value: raw, displayValue },
+        ];
+        // Reset field selection so user can pick another
         this.bulkUpdateSelectedField = null;
         this.bulkUpdateFieldSearch = '';
         this.bulkUpdateFieldValue = '';
     }
 
+    handleBulkUpdateRemoveFromQueue(event) {
+        const apiName = event.currentTarget.dataset.apiName;
+        this.bulkUpdateQueue = this.bulkUpdateQueue.filter(q => q.apiName !== apiName);
+    }
+
+    handleBulkUpdateClose() {
+        this.bulkUpdatePickerOpen = false;
+        this.bulkUpdateSelectedField = null;
+        this.bulkUpdateFieldSearch = '';
+        this.bulkUpdateFieldValue = '';
+        this.bulkUpdateQueue = [];
+    }
+
     async handleBulkUpdateApply() {
-        const field = this.bulkUpdateSelectedField;
-        if (!field) return;
+        if (!this.bulkUpdateQueue.length) return;
         const accountIds = [...this.selectedIds];
         if (!accountIds.length) return;
 
+        // Build fieldName → fieldValue map from the queue
+        const fieldUpdates = {};
+        for (const item of this.bulkUpdateQueue) {
+            fieldUpdates[item.apiName] = item.value;
+        }
+
         this.isBulkUpdating = true;
         try {
-            const result = await bulkUpdateAccountField({
-                fieldName: field.apiName,
-                fieldValue: this.bulkUpdateFieldValue,
+            const result = await bulkUpdateAccountFields({
+                fieldUpdatesJson: JSON.stringify(fieldUpdates),
                 accountIds,
             });
             if (result.ok) {
+                const fieldLabels = this.bulkUpdateQueue.map(q => q.label).join(', ');
                 this.showToast('Success',
-                    `Updated ${field.label} on ${result.updated} accounts.`, 'success');
+                    `Updated ${fieldLabels} on ${result.updated} accounts.`, 'success');
                 this.bulkUpdatePickerOpen = false;
                 this.bulkUpdateSelectedField = null;
                 this.bulkUpdateFieldSearch = '';
                 this.bulkUpdateFieldValue = '';
+                this.bulkUpdateQueue = [];
                 this.selectedIds = new Set();
                 this._invalidateCaches();
                 await refreshApex(this._wiredAccountResult);

@@ -199,7 +199,7 @@
                                                         </template>
                                                     </div>
                                                 </template>
-                                                <!-- Step 2: Value input -->
+                                                <!-- Step 2: Value input for selected field -->
                                                 <template if:true={bulkUpdateSelectedField}>
                                                     <p class="slds-text-body_small slds-m-bottom_xx-small">
                                                         Field: <strong>{bulkUpdateSelectedField.label}</strong>
@@ -257,20 +257,51 @@
                                                             class="slds-m-bottom_x-small"
                                                         ></lightning-input>
                                                     </template>
-                                                    <div class="slds-grid slds-grid_align-end slds-m-top_xx-small">
+                                                    <lightning-button
+                                                        label="Add to Update"
+                                                        variant="neutral"
+                                                        icon-name="utility:add"
+                                                        onclick={handleBulkUpdateAddToQueue}
+                                                        class="slds-m-top_xx-small"
+                                                    ></lightning-button>
+                                                </template>
+                                                <!-- Queued field updates -->
+                                                <template if:true={hasBulkUpdateQueue}>
+                                                    <div class="slds-m-top_x-small slds-border_top slds-p-top_x-small">
+                                                        <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_xx-small">Queued updates:</p>
+                                                        <template for:each={bulkUpdateQueue} for:item="qi">
+                                                            <div key={qi.apiName} class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
+                                                                <span class="slds-text-body_small slds-grow">
+                                                                    <strong>{qi.label}:</strong> {qi.displayValue}
+                                                                </span>
+                                                                <lightning-button-icon
+                                                                    icon-name="utility:close"
+                                                                    alternative-text="Remove"
+                                                                    size="small"
+                                                                    variant="bare"
+                                                                    data-api-name={qi.apiName}
+                                                                    onclick={handleBulkUpdateRemoveFromQueue}
+                                                                ></lightning-button-icon>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <!-- Action buttons -->
+                                                <div class="slds-grid slds-grid_align-end slds-m-top_x-small">
+                                                    <lightning-button
+                                                        label="Cancel"
+                                                        onclick={handleBulkUpdateClose}
+                                                        class="slds-m-right_xx-small"
+                                                    ></lightning-button>
+                                                    <template if:true={hasBulkUpdateQueue}>
                                                         <lightning-button
-                                                            label="Cancel"
-                                                            onclick={handleBulkUpdateClose}
-                                                            class="slds-m-right_xx-small"
-                                                        ></lightning-button>
-                                                        <lightning-button
-                                                            label="Apply"
+                                                            label="Apply All"
                                                             variant="brand"
                                                             onclick={handleBulkUpdateApply}
                                                             disabled={isBulkUpdating}
                                                         ></lightning-button>
-                                                    </div>
-                                                </template>
+                                                    </template>
+                                                </div>
                                             </div>
                                         </template>
                                     </div>
