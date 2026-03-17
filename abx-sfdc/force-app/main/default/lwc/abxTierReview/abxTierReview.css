@@ -1,10 +1,21 @@
 :host {
     display: block;
+    overflow: visible !important;
 }
 
 .abx-tier-review {
     max-width: 1400px;
     margin: 0 auto;
+    overflow: visible;
+    min-height: fit-content;
+}
+
+/* Prevent Lightning tab containers from clipping content */
+lightning-tabset,
+lightning-tab,
+lightning-tabset [role="tabpanel"],
+slot {
+    overflow: visible !important;
 }
 
 .account-card {
@@ -28,6 +39,7 @@
 
 .toolbar {
     min-height: 36px;
+    overflow: visible;
 }
 
 .search-input {
