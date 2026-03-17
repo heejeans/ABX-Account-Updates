@@ -1,4 +1,5 @@
 import { LightningElement, wire, track } from 'lwc';
+import { CurrentPageReference, NavigationMixin } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { refreshApex } from '@salesforce/apex';
 import getAccountReviewData from '@salesforce/apex/ABXTierReviewController.getAccountReviewData';
@@ -98,7 +99,7 @@ function effectiveTier(account, approvedIds, rejectedIds) {
     return account.currentTier || null;
 }
 
-export default class AbxTierReview extends LightningElement {
+export default class AbxTierReview extends NavigationMixin(LightningElement) {
     // ─── State ────────────────────────────────────────────────────────────────
     @track allAccounts = [];
     @track campaignData = null;
@@ -151,6 +152,91 @@ export default class AbxTierReview extends LightningElement {
 
     _wiredAccountResult;
     _wiredCampaignResult;
+    _pageRef;
+    _urlInitialized = false;
+    _suppressUrlUpdate = false;
+    _campaignViewFromUrl = null;
+
+    // ─── URL Routing ──────────────────────────────────────────────────────
+
+    static FILTER_SLUGS = {
+        'Current ABX': 'current-abx',
+        'Final ABX': 'final-abx',
+        'Add': 'add',
+        'Remove': 'remove',
+        'Reclassify': 'reclassify',
+        'Unassigned AE': 'no-ae',
+    };
+
+    static SLUG_TO_FILTER = Object.fromEntries(
+        Object.entries(AbxTierReview.FILTER_SLUGS).map(([k, v]) => [v, k])
+    );
+
+    static CP_VIEW_SLUGS = {
+        'in-campaign': 'in-campaign',
+        'needs-add': 'needs-add',
+        'needs-remove': 'needs-remove',
+    };
+
+    @wire(CurrentPageReference)
+    handlePageReference(pageRef) {
+        if (!pageRef) return;
+        this._pageRef = pageRef;
+        const state = pageRef.state || {};
+
+        // Only apply URL → state on initial load
+        if (!this._urlInitialized) {
+            this._urlInitialized = true;
+            this._suppressUrlUpdate = true;
+
+            // Tab
+            if (state.c__tab === 'campaign') {
+                this.activeTab = 'campaign';
+            } else if (state.c__tab === 'review' || !state.c__tab) {
+                this.activeTab = 'review';
+            }
+
+            // View (filter) within Review tab
+            if (state.c__view && AbxTierReview.SLUG_TO_FILTER[state.c__view]) {
+                this.activeFilter = AbxTierReview.SLUG_TO_FILTER[state.c__view];
+            }
+
+            // Reason sub-filter
+            if (state.c__reason) {
+                this.activeReasonFilter = decodeURIComponent(state.c__reason);
+            }
+
+            // Campaign sync view
+            if (state.c__cpview && AbxTierReview.CP_VIEW_SLUGS[state.c__cpview]) {
+                this._campaignViewFromUrl = state.c__cpview;
+            }
+
+            this._suppressUrlUpdate = false;
+        }
+    }
+
+    _updateUrl() {
+        if (this._suppressUrlUpdate || !this._pageRef) return;
+        const state = {
+            c__tab: this.activeTab,
+        };
+        if (this.activeTab === 'review') {
+            state.c__view = AbxTierReview.FILTER_SLUGS[this.activeFilter] || 'current-abx';
+            if (this.activeReasonFilter) {
+                state.c__reason = this.activeReasonFilter;
+            }
+        }
+        if (this.activeTab === 'campaign' && this._lastCampaignView) {
+            state.c__cpview = this._lastCampaignView;
+        }
+        this[NavigationMixin.Navigate]({
+            type: 'standard__navItemPage',
+            attributes: {
+                apiName: this._pageRef.attributes.apiName,
+            },
+            state,
+        }, true); // replace = true so it doesn't create browser history for every click
+    }
 
     // ─── Memoization caches ────────────────────────────────────────────────
     // Each expensive getter checks if its dependencies changed by reference.
@@ -405,7 +491,7 @@ export default class AbxTierReview extends LightningElement {
                     (a.action === 'Remove' && rejected.has(a.id)) ||
                     (a.action === 'Add' && !rejected.has(a.id));
             } else if (filter === 'Unassigned AE') {
-                include = !!effectiveTier(a, approved, rejected) && !a.accountExecutiveName;
+                include = !!a.currentTier && !a.accountExecutiveName;
             } else if (ACTIONABLE_ACTIONS.has(filter)) {
                 include = a.action === filter
                     && !approved.has(a.id) && !rejected.has(a.id)
@@ -815,6 +901,7 @@ export default class AbxTierReview extends LightningElement {
 
     handleTabChange(event) {
         this.activeTab = event.target.value;
+        this._updateUrl();
     }
 
     // ─── Filter stats bar handling ────────────────────────────────────────
@@ -824,11 +911,13 @@ export default class AbxTierReview extends LightningElement {
         this.activeFilter = filter;
         this.activeReasonFilter = null;
         this.selectedIds = new Set();
+        this._updateUrl();
     }
 
     handleReasonClick(event) {
         const reason = event.currentTarget.dataset.reason;
         this.activeReasonFilter = this.activeReasonFilter === reason ? null : reason;
+        this._updateUrl();
     }
 
     // ─── Search (debounced) ───────────────────────────────────────────────
@@ -1098,6 +1187,11 @@ export default class AbxTierReview extends LightningElement {
     }
 
     // ─── Campaign Sync handlers (dispatched from c-abx-campaign-sync) ─────────
+
+    handleCpViewChange(event) {
+        this._lastCampaignView = event.detail.view;
+        this._updateUrl();
+    }
 
     handleCpApprove(event) {
         const id = event.detail.accountId;

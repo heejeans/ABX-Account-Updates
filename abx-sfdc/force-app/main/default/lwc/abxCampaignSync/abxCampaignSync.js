@@ -46,6 +46,18 @@ export default class AbxCampaignSync extends LightningElement {
     @api cpApprovedIds = new Set();
     @api cpRejectedIds = new Set();
 
+    _initialViewApplied = false;
+    @api
+    get initialView() { return this._initialView; }
+    set initialView(val) {
+        this._initialView = val;
+        if (val && !this._initialViewApplied) {
+            this._initialViewApplied = true;
+            this.filter = val;
+        }
+    }
+    _initialView = null;
+
     @track searchTerm = '';
     @track filter = 'in-campaign';   // default to "Currently in Campaign"
     @track selectedIds = new Set();
@@ -116,6 +128,9 @@ export default class AbxCampaignSync extends LightningElement {
     handleCardClick(event) {
         this.filter = event.currentTarget.dataset.filter;
         this.selectedIds = new Set();
+        this.dispatchEvent(new CustomEvent('viewchange', {
+            detail: { view: this.filter },
+        }));
     }
 
     // ─── Computed: filtered rows ──────────────────────────────────────────────

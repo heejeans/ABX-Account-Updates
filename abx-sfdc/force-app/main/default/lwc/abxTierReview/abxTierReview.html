@@ -642,9 +642,11 @@
                         rejected-ids={rejectedIds}
                         cp-approved-ids={cpApprovedIds}
                         cp-rejected-ids={cpRejectedIds}
+                        initial-view={_campaignViewFromUrl}
                         oncpapprove={handleCpApprove}
                         oncpreject={handleCpReject}
                         oncpsync={handleCpSync}
+                        onviewchange={handleCpViewChange}
                     ></c-abx-campaign-sync>
                 </lightning-tab>
             </lightning-tabset>
