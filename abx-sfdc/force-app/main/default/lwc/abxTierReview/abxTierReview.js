@@ -1,5 +1,5 @@
 import { LightningElement, wire, track } from 'lwc';
-import { CurrentPageReference } from 'lightning/navigation';
+import { CurrentPageReference, NavigationMixin } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { refreshApex } from '@salesforce/apex';
 import getAccountReviewData from '@salesforce/apex/ABXTierReviewController.getAccountReviewData';
@@ -111,7 +111,7 @@ function effectiveTier(account, approvedIds, rejectedIds) {
     return account.currentTier || null;
 }
 
-export default class AbxTierReview extends LightningElement {
+export default class AbxTierReview extends NavigationMixin(LightningElement) {
     // ─── State ────────────────────────────────────────────────────────────────
     @track allAccounts = [];
     @track campaignData = null;
@@ -165,8 +165,7 @@ export default class AbxTierReview extends LightningElement {
     _wiredAccountResult;
     _wiredCampaignResult;
     _pageRef;
-    _urlInitialized = false;
-    _suppressUrlUpdate = false;
+    _lastNavState = null;  // tracks the state we last navigated to
     _campaignViewFromUrl = null;
 
     // ─── URL Routing ──────────────────────────────────────────────────────
@@ -196,53 +195,65 @@ export default class AbxTierReview extends LightningElement {
         this._pageRef = pageRef;
         const state = pageRef.state || {};
 
-        // Only apply URL → state on initial load
-        if (!this._urlInitialized) {
-            this._urlInitialized = true;
-            this._suppressUrlUpdate = true;
-
-            // Tab
-            if (state.c__tab === 'campaign') {
-                this.activeTab = 'campaign';
-            } else if (state.c__tab === 'review' || !state.c__tab) {
-                this.activeTab = 'review';
+        // If this pageRef matches what we just navigated to, skip — it's our own update
+        if (this._lastNavState) {
+            const ours = this._lastNavState;
+            if (state.c__tab === ours.c__tab
+                && state.c__view === ours.c__view
+                && state.c__reason === ours.c__reason
+                && state.c__cpview === ours.c__cpview) {
+                return;
             }
+        }
 
-            // View (filter) within Review tab
-            if (state.c__view && AbxTierReview.SLUG_TO_FILTER[state.c__view]) {
-                this.activeFilter = AbxTierReview.SLUG_TO_FILTER[state.c__view];
-            }
+        // Apply URL → component state (initial load or external navigation)
+        // Tab
+        if (state.c__tab === 'campaign') {
+            this.activeTab = 'campaign';
+        } else {
+            this.activeTab = 'review';
+        }
 
-            // Reason sub-filter
-            if (state.c__reason) {
-                this.activeReasonFilter = decodeURIComponent(state.c__reason);
-            }
+        // View (filter) within Review tab
+        if (state.c__view && AbxTierReview.SLUG_TO_FILTER[state.c__view]) {
+            this.activeFilter = AbxTierReview.SLUG_TO_FILTER[state.c__view];
+        } else {
+            this.activeFilter = 'Current ABX';
+        }
 
-            // Campaign sync view
-            if (state.c__cpview && AbxTierReview.CP_VIEW_SLUGS[state.c__cpview]) {
-                this._campaignViewFromUrl = state.c__cpview;
-            }
+        // Reason sub-filter
+        this.activeReasonFilter = state.c__reason
+            ? decodeURIComponent(state.c__reason)
+            : null;
 
-            this._suppressUrlUpdate = false;
+        // Campaign sync view
+        if (state.c__cpview && AbxTierReview.CP_VIEW_SLUGS[state.c__cpview]) {
+            this._campaignViewFromUrl = state.c__cpview;
         }
     }
 
     _updateUrl() {
-        if (this._suppressUrlUpdate || !this._pageRef) return;
-        const params = new URLSearchParams();
-        params.set('c__tab', this.activeTab);
+        if (!this._pageRef) return;
+        const state = {
+            c__tab: this.activeTab,
+        };
         if (this.activeTab === 'review') {
-            params.set('c__view', AbxTierReview.FILTER_SLUGS[this.activeFilter] || 'current-abx');
+            state.c__view = AbxTierReview.FILTER_SLUGS[this.activeFilter] || 'current-abx';
             if (this.activeReasonFilter) {
-                params.set('c__reason', this.activeReasonFilter);
+                state.c__reason = this.activeReasonFilter;
             }
         }
         if (this.activeTab === 'campaign' && this._lastCampaignView) {
-            params.set('c__cpview', this._lastCampaignView);
+            state.c__cpview = this._lastCampaignView;
         }
-        // Use replaceState to update URL without triggering Lightning navigation/reload
-        const base = window.location.pathname;
-        window.history.replaceState(null, '', base + '?' + params.toString());
+        this._lastNavState = state;
+        this[NavigationMixin.Navigate]({
+            type: 'standard__navItemPage',
+            attributes: {
+                apiName: this._pageRef.attributes.apiName,
+            },
+            state,
+        }, true);
     }
 
     // ─── Memoization caches ────────────────────────────────────────────────
