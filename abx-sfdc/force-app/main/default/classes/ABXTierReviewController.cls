@@ -20,7 +20,7 @@ public with sharing class ABXTierReviewController {
     private static final String ACCOUNT_FIELDS =
         'Id, Name, Type, ABX_Tier__c, ABX_Account__c, ABX_Start_Date__c, ' +
         'Fit_Score_Total__c, Account_Intent__c, Account_Stage__c, ' +
-        'Sales_Segment__c, Marketplace_Prospect__c, AI_Target_Account_Tier__c, ' +
+        'Sales_Segment__c, Marketplace_Prospect__c, ' +
         'Consulting_IT_Filter_Flow__c, Company_isDefunct__c, ' +
         'Qualified_Out_Detail__c, Qualified_Out_Date__c, Qualified_Out_Reason__c, ' +
         'ParentId, Entered_Closed_Lost_Date__c, ' +
@@ -120,7 +120,7 @@ public with sharing class ABXTierReviewController {
      * Fetches:
      *  - All currently tiered accounts (Remove / Reclassify / No Change)
      *  - All Closed Lost accounts (re-targeting evaluation)
-     *  - Prospect candidates with fit+intent, DNN flag, or AI Target tier (potential Adds)
+     *  - Prospect candidates with fit+intent or DNN flag (potential Adds)
      */
     @AuraEnabled(cacheable=true)
     public static ReviewData getAccountReviewData() {
@@ -136,7 +136,6 @@ public with sharing class ABXTierReviewController {
             '           AND Account_Intent__c != null' +
             '           AND Account_Intent__c != \'None\')' +
             '          OR Marketplace_Prospect__c = true' +
-            '          OR AI_Target_Account_Tier__c != null' +
             '        ))' +
             ' ORDER BY Name';
         List<Account> rawAccounts = Database.query(soql);
