@@ -165,8 +165,8 @@ export default class AbxTierReview extends NavigationMixin(LightningElement) {
     _wiredAccountResult;
     _wiredCampaignResult;
     _pageRef;
-    _lastNavState = null;  // tracks the state we last navigated to
     _campaignViewFromUrl = null;
+    _initialStateApplied = false;
 
     // ─── URL Routing ──────────────────────────────────────────────────────
 
@@ -193,38 +193,27 @@ export default class AbxTierReview extends NavigationMixin(LightningElement) {
     handlePageReference(pageRef) {
         if (!pageRef) return;
         this._pageRef = pageRef;
+
+        // Only apply URL → state once on initial load
+        if (this._initialStateApplied) return;
+        this._initialStateApplied = true;
+
         const state = pageRef.state || {};
 
-        // If this pageRef matches what we just navigated to, skip — it's our own update
-        if (this._lastNavState) {
-            const ours = this._lastNavState;
-            if (state.c__tab === ours.c__tab
-                && state.c__view === ours.c__view
-                && state.c__reason === ours.c__reason
-                && state.c__cpview === ours.c__cpview) {
-                return;
-            }
-        }
-
-        // Apply URL → component state (initial load or external navigation)
         // Tab
         if (state.c__tab === 'campaign') {
             this.activeTab = 'campaign';
-        } else {
-            this.activeTab = 'review';
         }
 
         // View (filter) within Review tab
         if (state.c__view && AbxTierReview.SLUG_TO_FILTER[state.c__view]) {
             this.activeFilter = AbxTierReview.SLUG_TO_FILTER[state.c__view];
-        } else {
-            this.activeFilter = 'Current ABX';
         }
 
         // Reason sub-filter
-        this.activeReasonFilter = state.c__reason
-            ? decodeURIComponent(state.c__reason)
-            : null;
+        if (state.c__reason) {
+            this.activeReasonFilter = decodeURIComponent(state.c__reason);
+        }
 
         // Campaign sync view
         if (state.c__cpview && AbxTierReview.CP_VIEW_SLUGS[state.c__cpview]) {
@@ -243,17 +232,19 @@ export default class AbxTierReview extends NavigationMixin(LightningElement) {
                 state.c__reason = this.activeReasonFilter;
             }
         }
-        if (this.activeTab === 'campaign' && this._lastCampaignView) {
-            state.c__cpview = this._lastCampaignView;
+        if (this.activeTab === 'campaign') {
+            state.c__cpview = this._lastCampaignView || 'in-campaign';
         }
-        this._lastNavState = state;
-        this[NavigationMixin.Navigate]({
+        // Generate the proper Lightning URL without navigating, then update browser URL
+        this[NavigationMixin.GenerateUrl]({
             type: 'standard__navItemPage',
             attributes: {
                 apiName: this._pageRef.attributes.apiName,
             },
             state,
-        }, true);
+        }).then(url => {
+            window.history.replaceState(null, '', url);
+        });
     }
 
     // ─── Memoization caches ────────────────────────────────────────────────
