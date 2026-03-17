@@ -69,14 +69,14 @@ slot {
 
 .filter-panel {
     position: absolute;
-    top: 100%;
+    bottom: 100%;
     right: 0;
     z-index: 200;
     width: 420px;
     max-height: 360px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
     border-radius: 8px;
-    margin-top: 4px;
+    margin-bottom: 4px;
     overflow: hidden;
 }
 
