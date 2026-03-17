@@ -28,6 +28,7 @@ const FIELD_CONFIGS = [
     { key: 'segment', label: 'Sales Segment', field: 'segment' },
     { key: 'fitBucket', label: 'Fit Score Total', field: null },  // special bucketing
     { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
+    { key: 'expectedTier', label: 'Expected ABX Tier', field: null, order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
     { key: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
     { key: 'dnn', label: 'Marketplace Prospect', field: null },  // special boolean
     { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory' },
@@ -50,6 +51,17 @@ function getFieldValue(account, config, dynamicFieldValues) {
     if (config.key === 'dnn') return account.isDnn ? 'DNN' : 'Non-DNN';
     if (config.key === 'aeStatus') return account.accountExecutiveName ? 'Assigned' : 'Unassigned';
     if (config.key === 'currentTier') return account.currentTier || 'No Tier';
+    if (config.key === 'expectedTier') {
+        // What the tier will be after recommendations are applied
+        if (account.action === 'Add' || account.action === 'Reclassify') {
+            return account.recommendedTier || 'No Tier';
+        }
+        if (account.action === 'Remove') {
+            return 'No Tier';
+        }
+        // No Change / Ignore — stays at current tier
+        return account.currentTier || 'No Tier';
+    }
     if (config.key === 'recommendedTier') return account.recommendedTier || 'No Tier';
     // Dynamic field lookup
     if (config.isDynamic && dynamicFieldValues) {
