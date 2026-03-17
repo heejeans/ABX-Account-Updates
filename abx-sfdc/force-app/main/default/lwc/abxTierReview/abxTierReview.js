@@ -1,5 +1,5 @@
 import { LightningElement, wire, track } from 'lwc';
-import { CurrentPageReference, NavigationMixin } from 'lightning/navigation';
+import { CurrentPageReference } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { refreshApex } from '@salesforce/apex';
 import getAccountReviewData from '@salesforce/apex/ABXTierReviewController.getAccountReviewData';
@@ -111,7 +111,7 @@ function effectiveTier(account, approvedIds, rejectedIds) {
     return account.currentTier || null;
 }
 
-export default class AbxTierReview extends NavigationMixin(LightningElement) {
+export default class AbxTierReview extends LightningElement {
     // ─── State ────────────────────────────────────────────────────────────────
     @track allAccounts = [];
     @track campaignData = null;
@@ -229,25 +229,20 @@ export default class AbxTierReview extends NavigationMixin(LightningElement) {
 
     _updateUrl() {
         if (this._suppressUrlUpdate || !this._pageRef) return;
-        const state = {
-            c__tab: this.activeTab,
-        };
+        const params = new URLSearchParams();
+        params.set('c__tab', this.activeTab);
         if (this.activeTab === 'review') {
-            state.c__view = AbxTierReview.FILTER_SLUGS[this.activeFilter] || 'current-abx';
+            params.set('c__view', AbxTierReview.FILTER_SLUGS[this.activeFilter] || 'current-abx');
             if (this.activeReasonFilter) {
-                state.c__reason = this.activeReasonFilter;
+                params.set('c__reason', this.activeReasonFilter);
             }
         }
         if (this.activeTab === 'campaign' && this._lastCampaignView) {
-            state.c__cpview = this._lastCampaignView;
+            params.set('c__cpview', this._lastCampaignView);
         }
-        this[NavigationMixin.Navigate]({
-            type: 'standard__navItemPage',
-            attributes: {
-                apiName: this._pageRef.attributes.apiName,
-            },
-            state,
-        }, true); // replace = true so it doesn't create browser history for every click
+        // Use replaceState to update URL without triggering Lightning navigation/reload
+        const base = window.location.pathname;
+        window.history.replaceState(null, '', base + '?' + params.toString());
     }
 
     // ─── Memoization caches ────────────────────────────────────────────────
