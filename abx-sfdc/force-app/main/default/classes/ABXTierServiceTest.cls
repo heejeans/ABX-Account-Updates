@@ -222,7 +222,7 @@ private class ABXTierServiceTest {
         Account a = buildAccount(new Map<String, Object>{
             'Account_Stage__c' => 'Closed Lost',
             'Entered_Closed_Lost_Date__c' => '2025-03-01',
-            'Fit_Score_Total__c' => 11,
+            'Fit_Score_Total__c' => 12,
             'Account_Intent__c' => 'High'
         });
 
@@ -249,7 +249,7 @@ private class ABXTierServiceTest {
     @isTest
     static void testMatrix_HighFitMedIntent_Tier2() {
         Account a = buildAccount(new Map<String, Object>{
-            'Fit_Score_Total__c' => 11,
+            'Fit_Score_Total__c' => 12,
             'Account_Intent__c' => 'Medium'
         });
 
@@ -261,13 +261,26 @@ private class ABXTierServiceTest {
     @isTest
     static void testMatrix_HighFitLowIntent_Tier3() {
         Account a = buildAccount(new Map<String, Object>{
-            'Fit_Score_Total__c' => 11,
+            'Fit_Score_Total__c' => 12,
             'Account_Intent__c' => 'Low'
         });
 
         ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
         System.assertEquals('Add', eval.action);
         System.assertEquals('Tier 3', eval.recommendedTier);
+    }
+
+    @isTest
+    static void testMatrix_MidFit11_HighIntent_Tier2() {
+        // Fit 11 now falls in 9-11 range → High intent = Tier 2
+        Account a = buildAccount(new Map<String, Object>{
+            'Fit_Score_Total__c' => 11,
+            'Account_Intent__c' => 'High'
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Add', eval.action);
+        System.assertEquals('Tier 2', eval.recommendedTier);
     }
 
     @isTest

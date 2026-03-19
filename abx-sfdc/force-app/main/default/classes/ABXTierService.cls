@@ -301,32 +301,32 @@ public class ABXTierService {
         Integer tier = null;
         String matrixReason = '';
 
-        if (fit >= 11) {
+        if (fit >= 12) {
             if (intentLevel == 'High') {
                 tier = 1;
-                matrixReason = 'Fit score ' + fit + ' (11-12 range) + High intent → Tier 1';
+                matrixReason = 'Fit score ' + fit + ' (12) + High intent → Tier 1';
             } else if (intentLevel == 'Medium') {
                 tier = 2;
-                matrixReason = 'Fit score ' + fit + ' (11-12 range) + Medium intent → Tier 2';
+                matrixReason = 'Fit score ' + fit + ' (12) + Medium intent → Tier 2';
             } else {
                 tier = 3;
-                matrixReason = 'Fit score ' + fit + ' (11-12 range) + Low/No intent → Tier 3';
+                matrixReason = 'Fit score ' + fit + ' (12) + Low/No intent → Tier 3';
             }
         } else if (fit >= 9) {
             if (intentLevel == 'High') {
                 tier = 2;
-                matrixReason = 'Fit score ' + fit + ' (9-10 range) + High intent → Tier 2';
+                matrixReason = 'Fit score ' + fit + ' (9-11 range) + High intent → Tier 2';
             } else if (intentLevel == 'Medium') {
                 tier = 3;
-                matrixReason = 'Fit score ' + fit + ' (9-10 range) + Medium intent → Tier 3';
+                matrixReason = 'Fit score ' + fit + ' (9-11 range) + Medium intent → Tier 3';
             } else {
                 if (isDnn) {
                     result.tier = 2;
-                    result.reason = 'DNN/Marketplace Prospect: fit score ' + fit + ' (9-10 range) + Low intent → Tier 2 (minimum override)';
+                    result.reason = 'DNN/Marketplace Prospect: fit score ' + fit + ' (9-11 range) + Low intent → Tier 2 (minimum override)';
                     return result;
                 }
                 result.tier = null;
-                result.reason = 'Fit score ' + fit + ' (9-10 range) + Low intent → Ignore';
+                result.reason = 'Fit score ' + fit + ' (9-11 range) + Low intent → Ignore';
                 return result;
             }
         } else { // fit >= 5 (guaranteed by earlier check)
