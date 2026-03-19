@@ -618,6 +618,61 @@ private class ABXTierServiceTest {
         System.assertEquals('Ignore', eval.action);
     }
 
+    @isTest
+    static void testFocusAccount_ParentAccountBypassed() {
+        // Has parent account + Focus + Enterprise AE → parent exclusion is bypassed
+        Account parent = new Account(Name = 'Parent Corp');
+        insert parent;
+        Account a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => 'Child Focus', 'Type' => 'Standard',
+                'Account_Stage__c' => 'Prospect',
+                'Sales_Segment__c' => 'Enterprise',
+                'Company_isDefunct__c' => 'false',
+                'Consulting_IT_Filter_Flow__c' => false,
+                'Marketplace_Prospect__c' => false,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 12,
+                'Account_Intent__c' => 'High',
+                'ParentId' => parent.Id,
+                'Owner' => new Map<String, Object>{
+                    'UserRole' => new Map<String, Object>{ 'Name' => 'Account Executive East' }
+                }
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Tier 1', eval.recommendedTier, 'Parent account should be bypassed for Focus + Enterprise AE');
+        System.assertEquals('Add', eval.action);
+    }
+
+    @isTest
+    static void testFocusAccount_ConsultingFilterBypassed() {
+        // Consulting/IT filter + Focus + Enterprise AE → filter exclusion is bypassed
+        Account a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => 'Consulting Focus', 'Type' => 'Standard',
+                'Account_Stage__c' => 'Prospect',
+                'Sales_Segment__c' => 'Enterprise',
+                'Company_isDefunct__c' => 'false',
+                'Consulting_IT_Filter_Flow__c' => true,
+                'Marketplace_Prospect__c' => false,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 12,
+                'Account_Intent__c' => 'High',
+                'Owner' => new Map<String, Object>{
+                    'UserRole' => new Map<String, Object>{ 'Name' => 'Account Executive East' }
+                }
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Tier 1', eval.recommendedTier, 'Consulting/IT filter should be bypassed for Focus + Enterprise AE');
+        System.assertEquals('Add', eval.action);
+    }
+
     // ─── Bulk processing test ────────────────────────────────────────────────────
 
     @isTest

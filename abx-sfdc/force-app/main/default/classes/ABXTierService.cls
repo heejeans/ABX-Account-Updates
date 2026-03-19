@@ -214,24 +214,18 @@ public class ABXTierService {
 
     /**
      * Strict exclusions that apply even to Focus Accounts.
-     * Excludes: parent account, qualified out, consulting/IT filter, excluded stages, non-Standard type.
-     * Does NOT exclude for: isDefunct or Sales Segment (bypassed for Focus Accounts).
+     * Bypassed for Focus Accounts: isDefunct, Sales Segment, parent account, consulting/IT filter.
+     * Still blocks: qualified out, excluded stages, non-Standard type.
      */
     private static List<String> shouldExcludeStrict(Account acct) {
         List<String> reasons = new List<String>();
 
-        if (acct.ParentId != null) {
-            reasons.add('Has a parent account (ParentId: ' + acct.ParentId + ')');
-        }
         if (hasValue(acct.Qualified_Out_Detail__c) || hasValue(acct.Qualified_Out_Date__c) || hasValue(acct.Qualified_Out_Reason__c)) {
             List<String> parts = new List<String>();
             if (hasValue(acct.Qualified_Out_Detail__c))  parts.add('detail: ' + acct.Qualified_Out_Detail__c);
             if (hasValue(acct.Qualified_Out_Date__c))    parts.add('date: ' + acct.Qualified_Out_Date__c);
             if (hasValue(acct.Qualified_Out_Reason__c))  parts.add('reason: ' + acct.Qualified_Out_Reason__c);
             reasons.add('Qualified out (' + String.join(parts, ', ') + ')');
-        }
-        if (acct.Consulting_IT_Filter_Flow__c == true) {
-            reasons.add('Consulting/IT filter flow is active');
         }
         if (acct.Account_Stage__c != null && EXCLUDE_STAGES.contains(acct.Account_Stage__c)) {
             reasons.add('Account stage "' + acct.Account_Stage__c + '" is excluded from tiering');
