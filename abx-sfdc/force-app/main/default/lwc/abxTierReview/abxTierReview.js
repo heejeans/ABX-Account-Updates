@@ -21,20 +21,84 @@ const ACTION_CLASSES = {
 };
 
 // Field filter category definitions (mirrors React FieldFilters FIELD_CONFIGS)
+// filterType: 'picklist' (checkboxes), 'number' (operator + value), 'text' (operator + value)
 const FIELD_CONFIGS = [
-    { key: 'intent', label: 'Account Intent', field: 'intent', order: ['High', 'Medium', 'Low', 'None'] },
-    { key: 'stage', label: 'Account Stage', field: 'stage' },
-    { key: 'segment', label: 'Sales Segment', field: 'segment' },
-    { key: 'fitScore', label: 'Fit Score Total', field: 'fitScore', type: 'number' },
-    { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
-    { key: 'expectedTier', label: 'Expected ABX Tier', field: null, order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
-    { key: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
-    { key: 'dnn', label: 'Marketplace Prospect', field: null },  // special boolean
-    { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory' },
-    { key: 'accountExecutive', label: 'Account Executive Owner', field: 'accountExecutiveName' },
-    { key: 'accountDevOwner', label: 'Account Development Owner', field: 'accountDevOwnerName' },
-    { key: 'aeStatus', label: 'AE Assigned', field: null },
+    { key: 'intent', label: 'Account Intent', field: 'intent', filterType: 'picklist', order: ['High', 'Medium', 'Low', 'None'] },
+    { key: 'stage', label: 'Account Stage', field: 'stage', filterType: 'picklist' },
+    { key: 'segment', label: 'Sales Segment', field: 'segment', filterType: 'picklist' },
+    { key: 'fitScore', label: 'Fit Score Total', field: 'fitScore', filterType: 'number' },
+    { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
+    { key: 'expectedTier', label: 'Expected ABX Tier', field: null, filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
+    { key: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
+    { key: 'dnn', label: 'Marketplace Prospect', field: null, filterType: 'picklist' },
+    { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory', filterType: 'picklist' },
+    { key: 'accountExecutive', label: 'Account Executive Owner', field: 'accountExecutiveName', filterType: 'text' },
+    { key: 'accountDevOwner', label: 'Account Development Owner', field: 'accountDevOwnerName', filterType: 'text' },
+    { key: 'aeStatus', label: 'AE Assigned', field: null, filterType: 'picklist' },
 ];
+
+const NUMBER_OPERATORS = [
+    { value: 'eq', label: 'equals' },
+    { value: 'neq', label: 'not equal to' },
+    { value: 'lt', label: 'less than' },
+    { value: 'gt', label: 'greater than' },
+    { value: 'lte', label: 'less or equal' },
+    { value: 'gte', label: 'greater or equal' },
+    { value: 'between', label: 'between' },
+    { value: 'empty', label: 'is empty' },
+    { value: 'notEmpty', label: 'is not empty' },
+];
+
+const TEXT_OPERATORS = [
+    { value: 'eq', label: 'equals' },
+    { value: 'neq', label: 'not equal' },
+    { value: 'contains', label: 'contains' },
+    { value: 'notContains', label: 'does not contain' },
+    { value: 'empty', label: 'is empty' },
+    { value: 'notEmpty', label: 'is not empty' },
+];
+
+/**
+ * Apply a single operator-based filter to a value.
+ * For number: value is numeric; for text: value is string.
+ */
+function matchesOperatorFilter(val, filter, filterType) {
+    const op = filter.operator;
+    if (op === 'empty') return val == null || val === '' || val === 'None';
+    if (op === 'notEmpty') return val != null && val !== '' && val !== 'None';
+
+    if (filterType === 'number') {
+        const numVal = (val != null) ? Number(val) : null;
+        // Parse comma-separated values for equals/not-equals
+        if (op === 'eq') {
+            const targets = String(filter.value).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+            return numVal != null && targets.includes(numVal);
+        }
+        if (op === 'neq') {
+            const targets = String(filter.value).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+            return numVal != null && !targets.includes(numVal);
+        }
+        const fv = Number(filter.value);
+        if (numVal == null || isNaN(numVal)) return false;
+        if (op === 'lt') return numVal < fv;
+        if (op === 'gt') return numVal > fv;
+        if (op === 'lte') return numVal <= fv;
+        if (op === 'gte') return numVal >= fv;
+        if (op === 'between') {
+            const fv2 = Number(filter.value2);
+            return numVal >= fv && numVal <= fv2;
+        }
+    } else {
+        // Text
+        const strVal = val != null ? String(val).toLowerCase() : '';
+        const fv = filter.value ? filter.value.toLowerCase() : '';
+        if (op === 'eq') return strVal === fv;
+        if (op === 'neq') return strVal !== fv;
+        if (op === 'contains') return strVal.includes(fv);
+        if (op === 'notContains') return !strVal.includes(fv);
+    }
+    return true;
+}
 
 const ACTIONABLE_ACTIONS = new Set(['Add', 'Remove', 'Reclassify']);
 
@@ -450,21 +514,22 @@ export default class AbxTierReview extends LightningElement {
             const config = configs[c];
             const selected = activeFilters[config.key];
             if (!selected) continue;
+            const ft = config.filterType || 'picklist';
 
-            // Numeric range filter
-            if (config.type === 'number' && selected.min != null && selected.max != null) {
-                const min = selected.min;
-                const max = selected.max;
+            if (selected.operator) {
+                // Operator-based filter (number / text)
                 const filtered = [];
                 for (let i = 0, len = base.length; i < len; i++) {
-                    const val = base[i][config.field];
-                    if (val != null && val >= min && val <= max) {
+                    const val = ft === 'number'
+                        ? base[i][config.field]
+                        : getFieldValue(base[i], config, dynVals);
+                    if (matchesOperatorFilter(val, selected, ft)) {
                         filtered.push(base[i]);
                     }
                 }
                 base = filtered;
             } else if (selected.size > 0) {
-                // Standard checkbox filter
+                // Picklist checkbox filter
                 const filtered = [];
                 for (let i = 0, len = base.length; i < len; i++) {
                     if (selected.has(getFieldValue(base[i], config, dynVals))) {
@@ -512,8 +577,8 @@ export default class AbxTierReview extends LightningElement {
         for (const key in filters) {
             const f = filters[key];
             if (!f) continue;
-            // Numeric range filter (has min/max)
-            if (f.min != null || f.max != null) { count++; continue; }
+            // Operator-based filter (number/text)
+            if (f.operator) { count++; continue; }
             // Checkbox filter (Set)
             if (f.size > 0) count++;
         }
@@ -542,6 +607,7 @@ export default class AbxTierReview extends LightningElement {
                 field: null,
                 apiName: f.apiName,
                 isDynamic: true,
+                filterType: f.filterType || 'picklist',
             })),
         ];
     }
@@ -565,33 +631,32 @@ export default class AbxTierReview extends LightningElement {
         for (let c = 0, cLen = configs.length; c < cLen; c++) {
             const config = configs[c];
             const isActive = this.activeFilterCategory === config.key;
+            const ft = config.filterType || 'picklist';
 
-            // Number-type filters: show range inputs instead of checkboxes
-            if (config.type === 'number') {
-                const range = this.fieldFilters[config.key]; // { min, max } or undefined
+            // Operator-based filters (number / text)
+            if (ft === 'number' || ft === 'text') {
+                const filter = this.fieldFilters[config.key]; // { operator, value, value2 } or undefined
                 result.push({
                     key: config.key,
                     label: config.label,
-                    isDynamic: false,
-                    isNumeric: true,
+                    isDynamic: !!config.isDynamic,
+                    filterType: ft,
                     isActive,
                     catClass: isActive ? 'filter-cat filter-cat--active' : 'filter-cat',
-                    hasSelections: !!range,
-                    rangeMin: range ? range.min : '',
-                    rangeMax: range ? range.max : '',
+                    hasSelections: !!filter,
                     values: [],
                 });
                 continue;
             }
 
-            // Standard checkbox filters
+            // Picklist checkbox filters
             const valueCounts = new Map();
             for (let i = 0, len = accounts.length; i < len; i++) {
                 const val = getFieldValue(accounts[i], config, dynVals);
                 valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
             }
 
-            if (valueCounts.size <= 1) continue; // skip single-value categories
+            if (valueCounts.size <= 1) continue;
 
             let sortedValues;
             if (config.order) {
@@ -606,7 +671,7 @@ export default class AbxTierReview extends LightningElement {
                 key: config.key,
                 label: config.label,
                 isDynamic: !!config.isDynamic,
-                isNumeric: false,
+                filterType: 'picklist',
                 isActive,
                 catClass: isActive ? 'filter-cat filter-cat--active' : 'filter-cat',
                 hasSelections: selected.size > 0,
@@ -675,45 +740,81 @@ export default class AbxTierReview extends LightningElement {
         return cat ? cat.values : [];
     }
 
-    get activeFilterIsNumeric() {
-        if (!this.activeFilterCategory) return false;
+    get activeFilterType() {
+        if (!this.activeFilterCategory) return 'picklist';
         const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
-        return cat ? cat.isNumeric : false;
+        return cat ? cat.filterType : 'picklist';
     }
 
-    get activeFilterRangeMin() {
-        if (!this.activeFilterCategory) return '';
-        const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
-        return cat ? cat.rangeMin : '';
+    get isActiveFilterPicklist() { return this.activeFilterType === 'picklist'; }
+    get isActiveFilterNumber()   { return this.activeFilterType === 'number'; }
+    get isActiveFilterText()     { return this.activeFilterType === 'text'; }
+
+    get activeFilterOperators() {
+        const ops = this.activeFilterType === 'number' ? NUMBER_OPERATORS : TEXT_OPERATORS;
+        const current = this.activeFilterOperator;
+        return ops.map(op => ({ ...op, selected: op.value === current }));
     }
 
-    get activeFilterRangeMax() {
-        if (!this.activeFilterCategory) return '';
-        const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
-        return cat ? cat.rangeMax : '';
+    get activeFilterOperator() {
+        const f = this.fieldFilters[this.activeFilterCategory];
+        return f && f.operator ? f.operator : 'eq';
     }
 
-    handleFilterRangeChange(event) {
+    get activeFilterValue() {
+        const f = this.fieldFilters[this.activeFilterCategory];
+        return f && f.value != null ? f.value : '';
+    }
+
+    get activeFilterValue2() {
+        const f = this.fieldFilters[this.activeFilterCategory];
+        return f && f.value2 != null ? f.value2 : '';
+    }
+
+    get isActiveOperatorBetween() {
+        return this.activeFilterOperator === 'between';
+    }
+
+    get isActiveOperatorNeedsValue() {
+        const op = this.activeFilterOperator;
+        return op !== 'empty' && op !== 'notEmpty';
+    }
+
+    handleFilterOperatorChange(event) {
         const key = this.activeFilterCategory;
-        const which = event.currentTarget.dataset.range; // 'min' or 'max'
-        const raw = event.currentTarget.value;
-        const num = raw !== '' ? Number(raw) : null;
-
+        const op = event.target.value;
         const newFilters = { ...this.fieldFilters };
         const current = newFilters[key] || {};
-        const updated = {
-            min: which === 'min' ? num : (current.min != null ? current.min : null),
-            max: which === 'max' ? num : (current.max != null ? current.max : null),
-        };
 
-        if (updated.min == null && updated.max == null) {
-            delete newFilters[key];
+        if (op === 'empty' || op === 'notEmpty') {
+            newFilters[key] = { operator: op };
         } else {
-            // If only one value provided, use it for both
-            if (updated.min != null && updated.max == null) updated.max = Infinity;
-            if (updated.max != null && updated.min == null) updated.min = -Infinity;
-            newFilters[key] = updated;
+            newFilters[key] = { operator: op, value: current.value || '', value2: current.value2 || '' };
         }
+        this.fieldFilters = newFilters;
+    }
+
+    handleFilterValueInput(event) {
+        const key = this.activeFilterCategory;
+        const which = event.currentTarget.dataset.which || 'value'; // 'value' or 'value2'
+        const raw = event.target.value;
+        const newFilters = { ...this.fieldFilters };
+        const current = newFilters[key] || { operator: 'eq' };
+
+        newFilters[key] = { ...current, [which]: raw };
+
+        // Clean up: if operator-based filter has no value and isn't empty/notEmpty, remove it
+        const op = newFilters[key].operator;
+        if (op !== 'empty' && op !== 'notEmpty' && !newFilters[key].value && !newFilters[key].value2) {
+            delete newFilters[key];
+        }
+        this.fieldFilters = newFilters;
+    }
+
+    handleClearOperatorFilter() {
+        const key = this.activeFilterCategory;
+        const newFilters = { ...this.fieldFilters };
+        delete newFilters[key];
         this.fieldFilters = newFilters;
     }
 

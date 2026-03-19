@@ -379,39 +379,80 @@
                                             </div>
                                             <!-- Right: values -->
                                             <div class="filter-panel__vals">
-                                                <template if:true={activeFilterIsNumeric}>
-                                                    <div class="filter-range">
-                                                        <p class="slds-text-body_small slds-m-bottom_x-small">Enter a value or range:</p>
-                                                        <div class="slds-grid slds-grid_vertical-align-center slds-gutters_x-small">
-                                                            <div class="slds-col">
+                                                <!-- Number operator filter -->
+                                                <template if:true={isActiveFilterNumber}>
+                                                    <div class="filter-operator">
+                                                        <label class="slds-form-element__label">Operator</label>
+                                                        <select class="slds-select slds-m-bottom_x-small" onchange={handleFilterOperatorChange}>
+                                                            <template for:each={activeFilterOperators} for:item="op">
+                                                                <option key={op.value} value={op.value} selected={op.selected}>{op.label}</option>
+                                                            </template>
+                                                        </select>
+                                                        <template if:true={isActiveOperatorNeedsValue}>
+                                                            <label class="slds-form-element__label">Value</label>
+                                                            <lightning-input
+                                                                type="number"
+                                                                value={activeFilterValue}
+                                                                data-which="value"
+                                                                onchange={handleFilterValueInput}
+                                                                variant="label-hidden"
+                                                                label="Value"
+                                                                class="slds-m-bottom_x-small"
+                                                            ></lightning-input>
+                                                            <template if:true={isActiveOperatorBetween}>
+                                                                <label class="slds-form-element__label">and</label>
                                                                 <lightning-input
                                                                     type="number"
-                                                                    label="Min"
-                                                                    value={activeFilterRangeMin}
-                                                                    data-range="min"
-                                                                    onchange={handleFilterRangeChange}
-                                                                    variant="label-stacked"
-                                                                    class="filter-range__input"
+                                                                    value={activeFilterValue2}
+                                                                    data-which="value2"
+                                                                    onchange={handleFilterValueInput}
+                                                                    variant="label-hidden"
+                                                                    label="Value 2"
+                                                                    class="slds-m-bottom_x-small"
                                                                 ></lightning-input>
-                                                            </div>
-                                                            <div class="slds-col slds-shrink-none slds-p-top_large">
-                                                                <span class="slds-text-body_small">to</span>
-                                                            </div>
-                                                            <div class="slds-col">
-                                                                <lightning-input
-                                                                    type="number"
-                                                                    label="Max"
-                                                                    value={activeFilterRangeMax}
-                                                                    data-range="max"
-                                                                    onchange={handleFilterRangeChange}
-                                                                    variant="label-stacked"
-                                                                    class="filter-range__input"
-                                                                ></lightning-input>
-                                                            </div>
-                                                        </div>
+                                                            </template>
+                                                        </template>
+                                                        <lightning-button
+                                                            label="Clear"
+                                                            variant="base"
+                                                            icon-name="utility:close"
+                                                            onclick={handleClearOperatorFilter}
+                                                            class="slds-m-top_xx-small"
+                                                        ></lightning-button>
                                                     </div>
                                                 </template>
-                                                <template if:false={activeFilterIsNumeric}>
+                                                <!-- Text operator filter -->
+                                                <template if:true={isActiveFilterText}>
+                                                    <div class="filter-operator">
+                                                        <label class="slds-form-element__label">Operator</label>
+                                                        <select class="slds-select slds-m-bottom_x-small" onchange={handleFilterOperatorChange}>
+                                                            <template for:each={activeFilterOperators} for:item="op">
+                                                                <option key={op.value} value={op.value} selected={op.selected}>{op.label}</option>
+                                                            </template>
+                                                        </select>
+                                                        <template if:true={isActiveOperatorNeedsValue}>
+                                                            <label class="slds-form-element__label">Value</label>
+                                                            <lightning-input
+                                                                type="text"
+                                                                value={activeFilterValue}
+                                                                data-which="value"
+                                                                onchange={handleFilterValueInput}
+                                                                variant="label-hidden"
+                                                                label="Value"
+                                                                class="slds-m-bottom_x-small"
+                                                            ></lightning-input>
+                                                        </template>
+                                                        <lightning-button
+                                                            label="Clear"
+                                                            variant="base"
+                                                            icon-name="utility:close"
+                                                            onclick={handleClearOperatorFilter}
+                                                            class="slds-m-top_xx-small"
+                                                        ></lightning-button>
+                                                    </div>
+                                                </template>
+                                                <!-- Picklist checkbox filter -->
+                                                <template if:true={isActiveFilterPicklist}>
                                                     <template for:each={activeFilterValues} for:item="fv">
                                                         <label key={fv.value} class="filter-value">
                                                             <input

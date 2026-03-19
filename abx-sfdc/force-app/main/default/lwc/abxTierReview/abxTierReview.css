@@ -129,12 +129,18 @@ slot {
     max-height: 340px;
 }
 
-.filter-range {
+.filter-operator {
     padding: 4px 0;
 }
 
-.filter-range__input {
-    max-width: 100px;
+.filter-operator .slds-select {
+    max-width: 200px;
+}
+
+.filter-operator .slds-form-element__label {
+    font-size: 0.75rem;
+    color: #706e6b;
+    margin-bottom: 2px;
 }
 
 .filter-value {
