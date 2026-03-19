@@ -449,6 +449,122 @@ private class ABXTierServiceTest {
         System.assertEquals(null, eval.recommendedTier);
     }
 
+    // ─── Focus Account override tests ───────────────────────────────────────────
+
+    @isTest
+    static void testFocusAccount_EnterpriseAE_ForceTier1_Add() {
+        // No current tier → should Add at Tier 1
+        Account a = buildAccount(new Map<String, Object>{
+            'Focus_Accounts__c' => true,
+            'Fit_Score_Total__c' => 5,
+            'Account_Intent__c' => 'Low'
+        });
+        // Simulate Enterprise AE role via Owner relationship
+        Map<String, Object> ownerMap = new Map<String, Object>{
+            'UserRole' => new Map<String, Object>{ 'Name' => 'Account Executive East' }
+        };
+        a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => a.Name, 'Type' => a.Type,
+                'Account_Stage__c' => a.Account_Stage__c,
+                'Sales_Segment__c' => a.Sales_Segment__c,
+                'Company_isDefunct__c' => a.Company_isDefunct__c,
+                'Consulting_IT_Filter_Flow__c' => a.Consulting_IT_Filter_Flow__c,
+                'Marketplace_Prospect__c' => a.Marketplace_Prospect__c,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 5,
+                'Account_Intent__c' => 'Low',
+                'Owner' => ownerMap
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Add', eval.action, 'Should Add: ' + eval.reason);
+        System.assertEquals('Tier 1', eval.recommendedTier, 'Should force Tier 1');
+        System.assert(eval.reason.contains('Focus Account'), 'Reason should mention Focus Account');
+    }
+
+    @isTest
+    static void testFocusAccount_EnterpriseAE_ForceTier1_Reclassify() {
+        // Has Tier 2 → should Reclassify to Tier 1
+        Account a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => 'Reclassify Focus', 'Type' => 'Standard',
+                'Account_Stage__c' => 'Prospect',
+                'Sales_Segment__c' => 'Enterprise',
+                'Company_isDefunct__c' => 'false',
+                'Consulting_IT_Filter_Flow__c' => false,
+                'Marketplace_Prospect__c' => false,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 5,
+                'Account_Intent__c' => 'Low',
+                'ABX_Tier__c' => 'Tier 2',
+                'Owner' => new Map<String, Object>{
+                    'UserRole' => new Map<String, Object>{ 'Name' => 'Account Executive West' }
+                }
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Reclassify', eval.action, 'Should Reclassify: ' + eval.reason);
+        System.assertEquals('Tier 1', eval.recommendedTier);
+    }
+
+    @isTest
+    static void testFocusAccount_MidMarketAE_NoOverride() {
+        // Mid-Market AE → should NOT force Tier 1, fall through to normal matrix
+        Account a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => 'MM Focus', 'Type' => 'Standard',
+                'Account_Stage__c' => 'Prospect',
+                'Sales_Segment__c' => 'Enterprise',
+                'Company_isDefunct__c' => 'false',
+                'Consulting_IT_Filter_Flow__c' => false,
+                'Marketplace_Prospect__c' => false,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 5,
+                'Account_Intent__c' => 'Low',
+                'Owner' => new Map<String, Object>{
+                    'UserRole' => new Map<String, Object>{ 'Name' => 'Mid-Market Account Executive' }
+                }
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        // Low fit + Low intent → should Ignore normally, not force Tier 1
+        System.assertNotEquals('Tier 1', eval.recommendedTier,
+            'Mid-Market AE focus account should not be forced to Tier 1');
+    }
+
+    @isTest
+    static void testFocusAccount_ExclusionTakesPrecedence() {
+        // Excluded (defunct) + Focus → exclusion wins, should Ignore
+        Account a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => 'Defunct Focus', 'Type' => 'Standard',
+                'Account_Stage__c' => 'Prospect',
+                'Sales_Segment__c' => 'Enterprise',
+                'Company_isDefunct__c' => 'true',
+                'Consulting_IT_Filter_Flow__c' => false,
+                'Marketplace_Prospect__c' => false,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 12,
+                'Account_Intent__c' => 'High',
+                'Owner' => new Map<String, Object>{
+                    'UserRole' => new Map<String, Object>{ 'Name' => 'Account Executive East' }
+                }
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Ignore', eval.action, 'Defunct account should be Ignored even if Focus');
+        System.assertNotEquals('Tier 1', eval.recommendedTier);
+    }
+
     // ─── Bulk processing test ────────────────────────────────────────────────────
 
     @isTest

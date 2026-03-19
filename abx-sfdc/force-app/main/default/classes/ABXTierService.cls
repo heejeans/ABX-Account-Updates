@@ -12,6 +12,11 @@
  */
 public class ABXTierService {
 
+    private static final Set<String> NON_ENTERPRISE_AE_ROLES = new Set<String>{
+        'Mid-Market Account Executive',
+        'Commercial Account Executive'
+    };
+
     private static final Set<String> EXCLUDE_STAGES = new Set<String>{
         'Customer', 'Pipeline', 'Churned Customer', 'Competitor',
         'Parent is Customer', 'Parent in Pipeline'
@@ -76,7 +81,32 @@ public class ABXTierService {
             return eval;
         }
 
-        // Step 2: Closed Lost routing
+        // Step 2: Focus Account override → force Tier 1 if owned by an Enterprise AE
+        if (acct.Focus_Accounts__c == true) {
+            String ownerRole = (acct.Owner != null && acct.Owner.UserRole != null)
+                ? acct.Owner.UserRole.Name : null;
+            Boolean isEnterpriseAE = (ownerRole == null)
+                || !NON_ENTERPRISE_AE_ROLES.contains(ownerRole);
+            if (isEnterpriseAE) {
+                TierEvaluation eval = new TierEvaluation();
+                eval.currentTier = currentTier;
+                eval.recommendedTier = 'Tier 1';
+                eval.intentLevel = classifyIntent(acct.Account_Intent__c);
+                if (currentTier == null) {
+                    eval.action = 'Add';
+                } else if (currentTier == 'Tier 1') {
+                    eval.action = 'No Change';
+                } else {
+                    eval.action = 'Reclassify';
+                }
+                eval.reason = 'Focus Account owned by Enterprise AE'
+                    + (ownerRole != null ? ' (' + ownerRole + ')' : '')
+                    + ' → forced Tier 1.';
+                return eval;
+            }
+        }
+
+        // Step 4: Closed Lost routing
         if (isClosedLost) {
             Boolean isRecentClosedLost = (closedLostDate != null && closedLostDate >= CLOSED_LOST_CUTOFF);
 
@@ -105,7 +135,7 @@ public class ABXTierService {
             // Closed lost before cutoff or no date → fall through to matrix
         }
 
-        // Step 3: Run tiering matrix
+        // Step 5: Run tiering matrix
         MatrixResult matrix = calcTierFromMatrix(acct);
         String recommendedTier = (matrix.tier != null) ? 'Tier ' + matrix.tier : null;
 
@@ -116,7 +146,7 @@ public class ABXTierService {
                 + ' (before Aug 1, 2025) — eligible for re-targeting. ';
         }
 
-        // Step 4: Determine action
+        // Step 6: Determine action
         TierEvaluation eval = new TierEvaluation();
         eval.currentTier = currentTier;
         eval.recommendedTier = recommendedTier;
