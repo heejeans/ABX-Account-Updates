@@ -520,9 +520,15 @@ export default class AbxTierReview extends LightningElement {
                 // Operator-based filter (number / text)
                 const filtered = [];
                 for (let i = 0, len = base.length; i < len; i++) {
-                    const val = ft === 'number'
-                        ? base[i][config.field]
-                        : getFieldValue(base[i], config, dynVals);
+                    let val;
+                    if (config.isDynamic && dynVals) {
+                        const av = dynVals[base[i].id];
+                        val = av ? av[config.apiName] : null;
+                    } else if (config.field) {
+                        val = base[i][config.field];
+                    } else {
+                        val = getFieldValue(base[i], config, dynVals);
+                    }
                     if (matchesOperatorFilter(val, selected, ft)) {
                         filtered.push(base[i]);
                     }
@@ -601,14 +607,25 @@ export default class AbxTierReview extends LightningElement {
     get allFieldConfigs() {
         return [
             ...FIELD_CONFIGS,
-            ...this.dynamicFilterFields.map(f => ({
-                key: f.key,
-                label: f.label,
-                field: null,
-                apiName: f.apiName,
-                isDynamic: true,
-                filterType: f.filterType || 'picklist',
-            })),
+            ...this.dynamicFilterFields.map(f => {
+                // Map Salesforce DisplayType to our filterType
+                let filterType = 'picklist';
+                const t = (f.type || '').toUpperCase();
+                if (['DOUBLE', 'CURRENCY', 'PERCENT', 'INTEGER'].includes(t)) {
+                    filterType = 'number';
+                } else if (['STRING', 'TEXTAREA', 'URL', 'EMAIL', 'PHONE', 'ID'].includes(t)) {
+                    filterType = 'text';
+                }
+                // PICKLIST, MULTIPICKLIST, BOOLEAN → stays 'picklist' (checkbox values)
+                return {
+                    key: f.key,
+                    label: f.label,
+                    field: null,
+                    apiName: f.apiName,
+                    isDynamic: true,
+                    filterType,
+                };
+            }),
         ];
     }
 
