@@ -379,17 +379,51 @@
                                             </div>
                                             <!-- Right: values -->
                                             <div class="filter-panel__vals">
-                                                <template for:each={activeFilterValues} for:item="fv">
-                                                    <label key={fv.value} class="filter-value">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={fv.checked}
-                                                            data-value={fv.value}
-                                                            onchange={handleFilterValueToggle}
-                                                        />
-                                                        <span class="filter-value__label">{fv.label}</span>
-                                                        <span class="filter-value__count">({fv.count})</span>
-                                                    </label>
+                                                <template if:true={activeFilterIsNumeric}>
+                                                    <div class="filter-range">
+                                                        <p class="slds-text-body_small slds-m-bottom_x-small">Enter a value or range:</p>
+                                                        <div class="slds-grid slds-grid_vertical-align-center slds-gutters_x-small">
+                                                            <div class="slds-col">
+                                                                <lightning-input
+                                                                    type="number"
+                                                                    label="Min"
+                                                                    value={activeFilterRangeMin}
+                                                                    data-range="min"
+                                                                    onchange={handleFilterRangeChange}
+                                                                    variant="label-stacked"
+                                                                    class="filter-range__input"
+                                                                ></lightning-input>
+                                                            </div>
+                                                            <div class="slds-col slds-shrink-none slds-p-top_large">
+                                                                <span class="slds-text-body_small">to</span>
+                                                            </div>
+                                                            <div class="slds-col">
+                                                                <lightning-input
+                                                                    type="number"
+                                                                    label="Max"
+                                                                    value={activeFilterRangeMax}
+                                                                    data-range="max"
+                                                                    onchange={handleFilterRangeChange}
+                                                                    variant="label-stacked"
+                                                                    class="filter-range__input"
+                                                                ></lightning-input>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template if:false={activeFilterIsNumeric}>
+                                                    <template for:each={activeFilterValues} for:item="fv">
+                                                        <label key={fv.value} class="filter-value">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={fv.checked}
+                                                                data-value={fv.value}
+                                                                onchange={handleFilterValueToggle}
+                                                            />
+                                                            <span class="filter-value__label">{fv.label}</span>
+                                                            <span class="filter-value__count">({fv.count})</span>
+                                                        </label>
+                                                    </template>
                                                 </template>
                                             </div>
                                         </div>

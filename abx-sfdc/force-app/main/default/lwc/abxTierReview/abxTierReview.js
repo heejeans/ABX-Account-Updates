@@ -25,7 +25,7 @@ const FIELD_CONFIGS = [
     { key: 'intent', label: 'Account Intent', field: 'intent', order: ['High', 'Medium', 'Low', 'None'] },
     { key: 'stage', label: 'Account Stage', field: 'stage' },
     { key: 'segment', label: 'Sales Segment', field: 'segment' },
-    { key: 'fitBucket', label: 'Fit Score Total', field: null },  // special bucketing
+    { key: 'fitScore', label: 'Fit Score Total', field: 'fitScore', type: 'number' },
     { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
     { key: 'expectedTier', label: 'Expected ABX Tier', field: null, order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
     { key: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
@@ -38,15 +38,7 @@ const FIELD_CONFIGS = [
 
 const ACTIONABLE_ACTIONS = new Set(['Add', 'Remove', 'Reclassify']);
 
-function getFitBucket(fitScore) {
-    if (fitScore == null) return 'No Score';
-    if (fitScore >= 9) return '9+ (High)';
-    if (fitScore >= 5) return '5-8 (Med)';
-    return '< 5 (Low)';
-}
-
 function getFieldValue(account, config, dynamicFieldValues) {
-    if (config.key === 'fitBucket') return getFitBucket(account.fitScore);
     if (config.key === 'dnn') return account.isDnn ? 'DNN' : 'Non-DNN';
     if (config.key === 'aeStatus') return account.accountExecutiveName ? 'Assigned' : 'Unassigned';
     if (config.key === 'currentTier') return account.currentTier || 'No Tier';
@@ -122,7 +114,7 @@ export default class AbxTierReview extends LightningElement {
     @track cpSelectedIds = new Set();
 
     // Field filter state
-    @track fieldFilters = {};       // { intent: Set(['High','Medium']), stage: Set([...]), ... }
+    @track fieldFilters = {};       // { intent: Set(['High','Medium']), fitScore: { min, max }, ... }
     @track filterPanelOpen = false;
     @track activeFilterCategory = null;
 
@@ -457,7 +449,22 @@ export default class AbxTierReview extends LightningElement {
         for (let c = 0, cLen = configs.length; c < cLen; c++) {
             const config = configs[c];
             const selected = activeFilters[config.key];
-            if (selected && selected.size > 0) {
+            if (!selected) continue;
+
+            // Numeric range filter
+            if (config.type === 'number' && selected.min != null && selected.max != null) {
+                const min = selected.min;
+                const max = selected.max;
+                const filtered = [];
+                for (let i = 0, len = base.length; i < len; i++) {
+                    const val = base[i][config.field];
+                    if (val != null && val >= min && val <= max) {
+                        filtered.push(base[i]);
+                    }
+                }
+                base = filtered;
+            } else if (selected.size > 0) {
+                // Standard checkbox filter
                 const filtered = [];
                 for (let i = 0, len = base.length; i < len; i++) {
                     if (selected.has(getFieldValue(base[i], config, dynVals))) {
@@ -503,7 +510,12 @@ export default class AbxTierReview extends LightningElement {
         let count = 0;
         const filters = this.fieldFilters;
         for (const key in filters) {
-            if (filters[key] && filters[key].size > 0) count++;
+            const f = filters[key];
+            if (!f) continue;
+            // Numeric range filter (has min/max)
+            if (f.min != null || f.max != null) { count++; continue; }
+            // Checkbox filter (Set)
+            if (f.size > 0) count++;
         }
         return count;
     }
@@ -552,7 +564,27 @@ export default class AbxTierReview extends LightningElement {
 
         for (let c = 0, cLen = configs.length; c < cLen; c++) {
             const config = configs[c];
-            // Single pass: collect unique values AND count them simultaneously
+            const isActive = this.activeFilterCategory === config.key;
+
+            // Number-type filters: show range inputs instead of checkboxes
+            if (config.type === 'number') {
+                const range = this.fieldFilters[config.key]; // { min, max } or undefined
+                result.push({
+                    key: config.key,
+                    label: config.label,
+                    isDynamic: false,
+                    isNumeric: true,
+                    isActive,
+                    catClass: isActive ? 'filter-cat filter-cat--active' : 'filter-cat',
+                    hasSelections: !!range,
+                    rangeMin: range ? range.min : '',
+                    rangeMax: range ? range.max : '',
+                    values: [],
+                });
+                continue;
+            }
+
+            // Standard checkbox filters
             const valueCounts = new Map();
             for (let i = 0, len = accounts.length; i < len; i++) {
                 const val = getFieldValue(accounts[i], config, dynVals);
@@ -569,12 +601,12 @@ export default class AbxTierReview extends LightningElement {
             }
 
             const selected = this.fieldFilters[config.key] || new Set();
-            const isActive = this.activeFilterCategory === config.key;
 
             result.push({
                 key: config.key,
                 label: config.label,
                 isDynamic: !!config.isDynamic,
+                isNumeric: false,
                 isActive,
                 catClass: isActive ? 'filter-cat filter-cat--active' : 'filter-cat',
                 hasSelections: selected.size > 0,
@@ -641,6 +673,48 @@ export default class AbxTierReview extends LightningElement {
         if (!this.activeFilterCategory) return [];
         const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
         return cat ? cat.values : [];
+    }
+
+    get activeFilterIsNumeric() {
+        if (!this.activeFilterCategory) return false;
+        const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
+        return cat ? cat.isNumeric : false;
+    }
+
+    get activeFilterRangeMin() {
+        if (!this.activeFilterCategory) return '';
+        const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
+        return cat ? cat.rangeMin : '';
+    }
+
+    get activeFilterRangeMax() {
+        if (!this.activeFilterCategory) return '';
+        const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
+        return cat ? cat.rangeMax : '';
+    }
+
+    handleFilterRangeChange(event) {
+        const key = this.activeFilterCategory;
+        const which = event.currentTarget.dataset.range; // 'min' or 'max'
+        const raw = event.currentTarget.value;
+        const num = raw !== '' ? Number(raw) : null;
+
+        const newFilters = { ...this.fieldFilters };
+        const current = newFilters[key] || {};
+        const updated = {
+            min: which === 'min' ? num : (current.min != null ? current.min : null),
+            max: which === 'max' ? num : (current.max != null ? current.max : null),
+        };
+
+        if (updated.min == null && updated.max == null) {
+            delete newFilters[key];
+        } else {
+            // If only one value provided, use it for both
+            if (updated.min != null && updated.max == null) updated.max = Infinity;
+            if (updated.max != null && updated.min == null) updated.min = -Infinity;
+            newFilters[key] = updated;
+        }
+        this.fieldFilters = newFilters;
     }
 
     // ─── Computed: Reason Groups (memoized) ──────────────────────────────

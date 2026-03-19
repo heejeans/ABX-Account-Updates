@@ -129,6 +129,14 @@ slot {
     max-height: 340px;
 }
 
+.filter-range {
+    padding: 4px 0;
+}
+
+.filter-range__input {
+    max-width: 100px;
+}
+
 .filter-value {
     display: flex;
     align-items: center;
