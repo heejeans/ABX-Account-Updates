@@ -1,28 +1,77 @@
 import { LightningElement, api, track } from 'lwc';
 
-// Field filter configs for campaign sync (same as Review tab)
+// filterType: 'picklist' (checkboxes), 'number' (operator + value), 'text' (operator + value)
 const FIELD_CONFIGS = [
-    { key: 'intent', label: 'Account Intent', field: 'intent', order: ['High', 'Medium', 'Low', 'None'] },
-    { key: 'stage', label: 'Account Stage', field: 'stage' },
-    { key: 'segment', label: 'Sales Segment', field: 'segment' },
-    { key: 'fitBucket', label: 'Fit Score Total', field: null },
-    { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
-    { key: 'dnn', label: 'Marketplace Prospect', field: null },
-    { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory' },
-    { key: 'accountExecutive', label: 'Account Executive Owner', field: 'accountExecutiveName' },
-    { key: 'accountDevOwner', label: 'Account Development Owner', field: 'accountDevOwnerName' },
-    { key: 'aeStatus', label: 'AE Assigned', field: null },
+    { key: 'intent', label: 'Account Intent', field: 'intent', filterType: 'picklist', order: ['High', 'Medium', 'Low', 'None'] },
+    { key: 'stage', label: 'Account Stage', field: 'stage', filterType: 'picklist' },
+    { key: 'segment', label: 'Sales Segment', field: 'segment', filterType: 'picklist' },
+    { key: 'fitScore', label: 'Fit Score Total', field: 'fitScore', filterType: 'number' },
+    { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
+    { key: 'dnn', label: 'Marketplace Prospect', field: null, filterType: 'picklist' },
+    { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory', filterType: 'picklist' },
+    { key: 'accountExecutive', label: 'Account Executive Owner', field: 'accountExecutiveName', filterType: 'text' },
+    { key: 'accountDevOwner', label: 'Account Development Owner', field: 'accountDevOwnerName', filterType: 'text' },
+    { key: 'aeStatus', label: 'AE Assigned', field: null, filterType: 'picklist' },
 ];
 
-function getFitBucket(fitScore) {
-    if (fitScore == null) return 'No Score';
-    if (fitScore >= 9) return '9+ (High)';
-    if (fitScore >= 5) return '5-8 (Med)';
-    return '< 5 (Low)';
+const NUMBER_OPERATORS = [
+    { value: 'eq', label: 'equals' },
+    { value: 'neq', label: 'not equal to' },
+    { value: 'lt', label: 'less than' },
+    { value: 'gt', label: 'greater than' },
+    { value: 'lte', label: 'less or equal' },
+    { value: 'gte', label: 'greater or equal' },
+    { value: 'between', label: 'between' },
+    { value: 'empty', label: 'is empty' },
+    { value: 'notEmpty', label: 'is not empty' },
+];
+
+const TEXT_OPERATORS = [
+    { value: 'eq', label: 'equals' },
+    { value: 'neq', label: 'not equal' },
+    { value: 'contains', label: 'contains' },
+    { value: 'notContains', label: 'does not contain' },
+    { value: 'empty', label: 'is empty' },
+    { value: 'notEmpty', label: 'is not empty' },
+];
+
+function matchesOperatorFilter(val, filter, filterType) {
+    const op = filter.operator;
+    if (op === 'empty') return val == null || val === '' || val === 'None';
+    if (op === 'notEmpty') return val != null && val !== '' && val !== 'None';
+
+    if (filterType === 'number') {
+        const numVal = (val != null) ? Number(val) : null;
+        if (op === 'eq') {
+            const targets = String(filter.value).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+            return numVal != null && targets.includes(numVal);
+        }
+        if (op === 'neq') {
+            const targets = String(filter.value).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+            return numVal != null && !targets.includes(numVal);
+        }
+        const fv = Number(filter.value);
+        if (numVal == null || isNaN(numVal)) return false;
+        if (op === 'lt') return numVal < fv;
+        if (op === 'gt') return numVal > fv;
+        if (op === 'lte') return numVal <= fv;
+        if (op === 'gte') return numVal >= fv;
+        if (op === 'between') {
+            const fv2 = Number(filter.value2);
+            return numVal >= fv && numVal <= fv2;
+        }
+    } else {
+        const strVal = val != null ? String(val).toLowerCase() : '';
+        const fv = filter.value ? filter.value.toLowerCase() : '';
+        if (op === 'eq') return strVal === fv;
+        if (op === 'neq') return strVal !== fv;
+        if (op === 'contains') return strVal.includes(fv);
+        if (op === 'notContains') return !strVal.includes(fv);
+    }
+    return true;
 }
 
 function getFieldValue(account, config) {
-    if (config.key === 'fitBucket') return getFitBucket(account.fitScore);
     if (config.key === 'dnn') return account.isDnn ? 'DNN' : 'Non-DNN';
     if (config.key === 'aeStatus') return account.accountExecutiveName ? 'Assigned' : 'Unassigned';
     if (config.key === 'currentTier') return account.currentTier || 'No Tier';
@@ -141,7 +190,15 @@ export default class AbxCampaignSync extends LightningElement {
         const activeFilters = this.fieldFilters;
         for (const config of FIELD_CONFIGS) {
             const selected = activeFilters[config.key];
-            if (selected && selected.size > 0) {
+            if (!selected) continue;
+            const ft = config.filterType || 'picklist';
+
+            if (selected.operator) {
+                base = base.filter(a => {
+                    const val = ft === 'number' ? a[config.field] : getFieldValue(a, config);
+                    return matchesOperatorFilter(val, selected, ft);
+                });
+            } else if (selected.size > 0) {
                 base = base.filter(a => selected.has(getFieldValue(a, config)));
             }
         }
@@ -193,7 +250,10 @@ export default class AbxCampaignSync extends LightningElement {
     get activeFieldFilterCount() {
         let count = 0;
         for (const key of Object.keys(this.fieldFilters)) {
-            if (this.fieldFilters[key] && this.fieldFilters[key].size > 0) count++;
+            const f = this.fieldFilters[key];
+            if (!f) continue;
+            if (f.operator) { count++; continue; }
+            if (f.size > 0) count++;
         }
         return count;
     }
@@ -214,30 +274,51 @@ export default class AbxCampaignSync extends LightningElement {
     get filterCategories() {
         const accounts = this.baseFilteredRows;
         return FIELD_CONFIGS.map(config => {
-            const values = new Set();
-            accounts.forEach(a => values.add(getFieldValue(a, config)));
-            if (values.size <= 1) return null;
+            const isActive = this.activeFilterCategory === config.key;
+            const ft = config.filterType || 'picklist';
+
+            // Operator-based filters (number / text)
+            if (ft === 'number' || ft === 'text') {
+                const filter = this.fieldFilters[config.key];
+                return {
+                    key: config.key,
+                    label: config.label,
+                    filterType: ft,
+                    isActive,
+                    catClass: isActive ? 'filter-cat filter-cat--active' : 'filter-cat',
+                    hasSelections: !!filter,
+                    values: [],
+                };
+            }
+
+            // Picklist checkbox filters
+            const valueCounts = new Map();
+            accounts.forEach(a => {
+                const val = getFieldValue(a, config);
+                valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
+            });
+            if (valueCounts.size <= 1) return null;
 
             let sortedValues;
             if (config.order) {
-                sortedValues = config.order.filter(v => values.has(v));
+                sortedValues = config.order.filter(v => valueCounts.has(v));
             } else {
-                sortedValues = [...values].sort();
+                sortedValues = [...valueCounts.keys()].sort();
             }
 
             const selected = this.fieldFilters[config.key] || new Set();
             return {
                 key: config.key,
                 label: config.label,
-                isActive: this.activeFilterCategory === config.key,
-                catClass: this.activeFilterCategory === config.key
-                    ? 'filter-cat filter-cat--active' : 'filter-cat',
+                filterType: 'picklist',
+                isActive,
+                catClass: isActive ? 'filter-cat filter-cat--active' : 'filter-cat',
                 hasSelections: selected.size > 0,
                 values: sortedValues.map(v => ({
                     value: v,
                     label: v,
                     checked: selected.has(v),
-                    count: accounts.filter(a => getFieldValue(a, config) === v).length,
+                    count: valueCounts.get(v) || 0,
                 })),
             };
         }).filter(Boolean);
@@ -282,6 +363,80 @@ export default class AbxCampaignSync extends LightningElement {
         if (!this.activeFilterCategory) return [];
         const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
         return cat ? cat.values : [];
+    }
+
+    get activeFilterType() {
+        if (!this.activeFilterCategory) return 'picklist';
+        const cat = this.filterCategories.find(c => c.key === this.activeFilterCategory);
+        return cat ? cat.filterType : 'picklist';
+    }
+
+    get isActiveFilterPicklist() { return this.activeFilterType === 'picklist'; }
+    get isActiveFilterNumber()   { return this.activeFilterType === 'number'; }
+    get isActiveFilterText()     { return this.activeFilterType === 'text'; }
+
+    get activeFilterOperators() {
+        const ops = this.activeFilterType === 'number' ? NUMBER_OPERATORS : TEXT_OPERATORS;
+        const current = this.activeFilterOperator;
+        return ops.map(op => ({ ...op, selected: op.value === current }));
+    }
+
+    get activeFilterOperator() {
+        const f = this.fieldFilters[this.activeFilterCategory];
+        return f && f.operator ? f.operator : 'eq';
+    }
+
+    get activeFilterValue() {
+        const f = this.fieldFilters[this.activeFilterCategory];
+        return f && f.value != null ? f.value : '';
+    }
+
+    get activeFilterValue2() {
+        const f = this.fieldFilters[this.activeFilterCategory];
+        return f && f.value2 != null ? f.value2 : '';
+    }
+
+    get isActiveOperatorBetween() {
+        return this.activeFilterOperator === 'between';
+    }
+
+    get isActiveOperatorNeedsValue() {
+        const op = this.activeFilterOperator;
+        return op !== 'empty' && op !== 'notEmpty';
+    }
+
+    handleFilterOperatorChange(event) {
+        const key = this.activeFilterCategory;
+        const op = event.target.value;
+        const newFilters = { ...this.fieldFilters };
+        const current = newFilters[key] || {};
+        if (op === 'empty' || op === 'notEmpty') {
+            newFilters[key] = { operator: op };
+        } else {
+            newFilters[key] = { operator: op, value: current.value || '', value2: current.value2 || '' };
+        }
+        this.fieldFilters = newFilters;
+    }
+
+    handleFilterValueInput(event) {
+        const key = this.activeFilterCategory;
+        const which = event.currentTarget.dataset.which || 'value';
+        const raw = event.target.value;
+        const newFilters = { ...this.fieldFilters };
+        const current = newFilters[key] || { operator: 'eq' };
+        newFilters[key] = { ...current, [which]: raw };
+        const op = newFilters[key].operator;
+        if (op !== 'empty' && op !== 'notEmpty' && !newFilters[key].value && !newFilters[key].value2) {
+            delete newFilters[key];
+        }
+        this.fieldFilters = newFilters;
+    }
+
+    handleClearOperatorFilter() {
+        const key = this.activeFilterCategory;
+        const newFilters = { ...this.fieldFilters };
+        delete newFilters[key];
+        this.fieldFilters = newFilters;
     }
 
     get isActionableView() {

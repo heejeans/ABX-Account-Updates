@@ -177,10 +177,17 @@ export default class AbxTierReview extends LightningElement {
     @track cpRejectedIds = new Set();
     @track cpSelectedIds = new Set();
 
-    // Field filter state
-    @track fieldFilters = {};       // { intent: Set(['High','Medium']), fitScore: { min, max }, ... }
+    // Field filter state — scoped per view (Current ABX, Add, Remove, etc.)
+    @track _allFieldFilters = {};   // { 'Current ABX': { intent: Set([...]) }, 'Add': { ... }, ... }
     @track filterPanelOpen = false;
     @track activeFilterCategory = null;
+
+    get fieldFilters() {
+        return this._allFieldFilters[this.activeFilter] || {};
+    }
+    set fieldFilters(val) {
+        this._allFieldFilters = { ...this._allFieldFilters, [this.activeFilter]: val };
+    }
 
     activeTab = 'review';
     activeFilter = 'Current ABX';
@@ -1248,7 +1255,7 @@ export default class AbxTierReview extends LightningElement {
         this.selectedIds = new Set();
         this.searchTerm = '';
         this.activeReasonFilter = null;
-        this.fieldFilters = {};
+        this._allFieldFilters = {};
         this.filterPanelOpen = false;
         this.aeAssignments = {};
         this.aeSearchTerms = {};
@@ -1274,7 +1281,7 @@ export default class AbxTierReview extends LightningElement {
         this.approvedIds = new Set();
         this.rejectedIds = new Set();
         this.selectedIds = new Set();
-        this.fieldFilters = {};
+        this._allFieldFilters = {};
         this.aeAssignments = {};
         this.aeSearchTerms = {};
         this.activeAEDropdownId = null;
