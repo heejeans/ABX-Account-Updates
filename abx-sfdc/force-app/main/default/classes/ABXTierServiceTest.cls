@@ -540,8 +540,8 @@ private class ABXTierServiceTest {
     }
 
     @isTest
-    static void testFocusAccount_ExclusionTakesPrecedence() {
-        // Excluded (defunct) + Focus → exclusion wins, should Ignore
+    static void testFocusAccount_DefunctBypassed() {
+        // Defunct + Focus + Enterprise AE → defunct exclusion is bypassed, should get Tier 1
         Account a = (Account) JSON.deserialize(
             JSON.serialize(new Map<String, Object>{
                 'Name' => 'Defunct Focus', 'Type' => 'Standard',
@@ -561,8 +561,61 @@ private class ABXTierServiceTest {
         );
 
         ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
-        System.assertEquals('Ignore', eval.action, 'Defunct account should be Ignored even if Focus');
-        System.assertNotEquals('Tier 1', eval.recommendedTier);
+        System.assertEquals('Tier 1', eval.recommendedTier, 'Defunct should be bypassed for Focus + Enterprise AE');
+        System.assertEquals('Add', eval.action);
+    }
+
+    @isTest
+    static void testFocusAccount_CommercialSegmentBypassed() {
+        // Commercial segment + Focus + Enterprise AE → segment exclusion is bypassed
+        Account a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => 'Commercial Focus', 'Type' => 'Standard',
+                'Account_Stage__c' => 'Prospect',
+                'Sales_Segment__c' => 'Commercial',
+                'Company_isDefunct__c' => 'false',
+                'Consulting_IT_Filter_Flow__c' => false,
+                'Marketplace_Prospect__c' => false,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 12,
+                'Account_Intent__c' => 'High',
+                'Owner' => new Map<String, Object>{
+                    'UserRole' => new Map<String, Object>{ 'Name' => 'Account Executive East' }
+                }
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Tier 1', eval.recommendedTier, 'Commercial segment should be bypassed for Focus + Enterprise AE');
+        System.assertEquals('Add', eval.action);
+    }
+
+    @isTest
+    static void testFocusAccount_QualifiedOutStillBlocks() {
+        // Qualified out + Focus + Enterprise AE → qualified out is NOT bypassed
+        Account a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => 'Qualified Out Focus', 'Type' => 'Standard',
+                'Account_Stage__c' => 'Prospect',
+                'Sales_Segment__c' => 'Enterprise',
+                'Company_isDefunct__c' => 'false',
+                'Consulting_IT_Filter_Flow__c' => false,
+                'Marketplace_Prospect__c' => false,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 12,
+                'Account_Intent__c' => 'High',
+                'Qualified_Out_Reason__c' => 'Too small',
+                'Owner' => new Map<String, Object>{
+                    'UserRole' => new Map<String, Object>{ 'Name' => 'Account Executive East' }
+                }
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertNotEquals('Tier 1', eval.recommendedTier, 'Qualified out should still block even Focus accounts');
+        System.assertEquals('Ignore', eval.action);
     }
 
     // ─── Bulk processing test ────────────────────────────────────────────────────

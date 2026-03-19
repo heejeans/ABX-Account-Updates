@@ -61,7 +61,54 @@ public class ABXTierService {
         Date closedLostDate = acct.Entered_Closed_Lost_Date__c;
         Boolean isClosedLost = (stage == 'Closed Lost');
 
-        // Step 1: Check universal exclusions
+        // Step 1: Focus Account override — runs before full exclusions.
+        // Focus accounts owned by Enterprise AEs bypass isDefunct and Sales Segment
+        // exclusions (hand-picked by the AE), but all other exclusions still apply.
+        if (acct.Focus_Accounts__c == true) {
+            String ownerRole = (acct.Owner != null && acct.Owner.UserRole != null)
+                ? acct.Owner.UserRole.Name : null;
+            Boolean isEnterpriseAE = (ownerRole == null)
+                || !NON_ENTERPRISE_AE_ROLES.contains(ownerRole);
+            if (isEnterpriseAE) {
+                List<String> hardExclusions = shouldExcludeStrict(acct);
+                if (!hardExclusions.isEmpty()) {
+                    // Hard exclusions still block even focus accounts
+                    String reason = 'Excluded from tiering: ' + String.join(hardExclusions, '; ');
+                    TierEvaluation eval = new TierEvaluation();
+                    eval.intentLevel = classifyIntent(acct.Account_Intent__c);
+                    if (currentTier != null) {
+                        eval.action = 'Remove';
+                        eval.currentTier = currentTier;
+                        eval.recommendedTier = null;
+                        eval.reason = reason + '. Current tier ' + currentTier + ' should be removed.';
+                    } else {
+                        eval.action = 'Ignore';
+                        eval.currentTier = null;
+                        eval.recommendedTier = null;
+                        eval.reason = reason;
+                    }
+                    return eval;
+                }
+                // Passed hard exclusions → force Tier 1
+                TierEvaluation eval = new TierEvaluation();
+                eval.currentTier = currentTier;
+                eval.recommendedTier = 'Tier 1';
+                eval.intentLevel = classifyIntent(acct.Account_Intent__c);
+                if (currentTier == null) {
+                    eval.action = 'Add';
+                } else if (currentTier == 'Tier 1') {
+                    eval.action = 'No Change';
+                } else {
+                    eval.action = 'Reclassify';
+                }
+                eval.reason = 'Focus Account owned by Enterprise AE'
+                    + (ownerRole != null ? ' (' + ownerRole + ')' : '')
+                    + ' → forced Tier 1.';
+                return eval;
+            }
+        }
+
+        // Step 2: Check full exclusions for non-focus accounts
         List<String> exclusionReasons = shouldExclude(acct);
         if (!exclusionReasons.isEmpty()) {
             String reason = 'Excluded from tiering: ' + String.join(exclusionReasons, '; ');
@@ -81,32 +128,7 @@ public class ABXTierService {
             return eval;
         }
 
-        // Step 2: Focus Account override → force Tier 1 if owned by an Enterprise AE
-        if (acct.Focus_Accounts__c == true) {
-            String ownerRole = (acct.Owner != null && acct.Owner.UserRole != null)
-                ? acct.Owner.UserRole.Name : null;
-            Boolean isEnterpriseAE = (ownerRole == null)
-                || !NON_ENTERPRISE_AE_ROLES.contains(ownerRole);
-            if (isEnterpriseAE) {
-                TierEvaluation eval = new TierEvaluation();
-                eval.currentTier = currentTier;
-                eval.recommendedTier = 'Tier 1';
-                eval.intentLevel = classifyIntent(acct.Account_Intent__c);
-                if (currentTier == null) {
-                    eval.action = 'Add';
-                } else if (currentTier == 'Tier 1') {
-                    eval.action = 'No Change';
-                } else {
-                    eval.action = 'Reclassify';
-                }
-                eval.reason = 'Focus Account owned by Enterprise AE'
-                    + (ownerRole != null ? ' (' + ownerRole + ')' : '')
-                    + ' → forced Tier 1.';
-                return eval;
-            }
-        }
-
-        // Step 4: Closed Lost routing
+        // Step 3: Closed Lost routing
         if (isClosedLost) {
             Boolean isRecentClosedLost = (closedLostDate != null && closedLostDate >= CLOSED_LOST_CUTOFF);
 
@@ -135,7 +157,7 @@ public class ABXTierService {
             // Closed lost before cutoff or no date → fall through to matrix
         }
 
-        // Step 5: Run tiering matrix
+        // Step 4: Run tiering matrix
         MatrixResult matrix = calcTierFromMatrix(acct);
         String recommendedTier = (matrix.tier != null) ? 'Tier ' + matrix.tier : null;
 
@@ -146,7 +168,7 @@ public class ABXTierService {
                 + ' (before Aug 1, 2025) — eligible for re-targeting. ';
         }
 
-        // Step 6: Determine action
+        // Step 5: Determine action
         TierEvaluation eval = new TierEvaluation();
         eval.currentTier = currentTier;
         eval.recommendedTier = recommendedTier;
@@ -189,6 +211,37 @@ public class ABXTierService {
     }
 
     // ─── Private helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Strict exclusions that apply even to Focus Accounts.
+     * Excludes: parent account, qualified out, consulting/IT filter, excluded stages, non-Standard type.
+     * Does NOT exclude for: isDefunct or Sales Segment (bypassed for Focus Accounts).
+     */
+    private static List<String> shouldExcludeStrict(Account acct) {
+        List<String> reasons = new List<String>();
+
+        if (acct.ParentId != null) {
+            reasons.add('Has a parent account (ParentId: ' + acct.ParentId + ')');
+        }
+        if (hasValue(acct.Qualified_Out_Detail__c) || hasValue(acct.Qualified_Out_Date__c) || hasValue(acct.Qualified_Out_Reason__c)) {
+            List<String> parts = new List<String>();
+            if (hasValue(acct.Qualified_Out_Detail__c))  parts.add('detail: ' + acct.Qualified_Out_Detail__c);
+            if (hasValue(acct.Qualified_Out_Date__c))    parts.add('date: ' + acct.Qualified_Out_Date__c);
+            if (hasValue(acct.Qualified_Out_Reason__c))  parts.add('reason: ' + acct.Qualified_Out_Reason__c);
+            reasons.add('Qualified out (' + String.join(parts, ', ') + ')');
+        }
+        if (acct.Consulting_IT_Filter_Flow__c == true) {
+            reasons.add('Consulting/IT filter flow is active');
+        }
+        if (acct.Account_Stage__c != null && EXCLUDE_STAGES.contains(acct.Account_Stage__c)) {
+            reasons.add('Account stage "' + acct.Account_Stage__c + '" is excluded from tiering');
+        }
+        if (acct.Type != 'Standard') {
+            reasons.add('Account type is ' + (acct.Type != null ? acct.Type : '(blank)') + ' (must be Standard for ABX targeting)');
+        }
+
+        return reasons;
+    }
 
     /**
      * Returns a list of exclusion reasons. Empty list means the account is eligible.
