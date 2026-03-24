@@ -310,6 +310,13 @@ export default class AbxCampaignSync extends LightningElement {
                 sortedValues = [...valueCounts.keys()].sort();
             }
 
+            // Always include an "(Empty)" option
+            const emptyKey = config.emptyLabel || 'None';
+            if (!valueCounts.has(emptyKey)) {
+                sortedValues.push(emptyKey);
+                valueCounts.set(emptyKey, 0);
+            }
+
             const selected = this.fieldFilters[config.key] || new Set();
             return {
                 key: config.key,

@@ -27,9 +27,9 @@ const FIELD_CONFIGS = [
     { key: 'stage', label: 'Account Stage', field: 'stage', filterType: 'picklist' },
     { key: 'segment', label: 'Sales Segment', field: 'segment', filterType: 'picklist' },
     { key: 'fitScore', label: 'Fit Score Total', field: 'fitScore', filterType: 'number' },
-    { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
-    { key: 'expectedTier', label: 'Expected ABX Tier', field: null, filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
-    { key: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'] },
+    { key: 'currentTier', label: 'ABX Tier', field: 'currentTier', filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'], emptyLabel: 'No Tier' },
+    { key: 'expectedTier', label: 'Expected ABX Tier', field: null, filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'], emptyLabel: 'No Tier' },
+    { key: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', filterType: 'picklist', order: ['Tier 1', 'Tier 2', 'Tier 3', 'No Tier'], emptyLabel: 'No Tier' },
     { key: 'dnn', label: 'Marketplace Prospect', field: null, filterType: 'picklist' },
     { key: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory', filterType: 'picklist' },
     { key: 'accountExecutive', label: 'Account Executive Owner', field: 'accountExecutiveName', filterType: 'text' },
@@ -685,6 +685,13 @@ export default class AbxTierReview extends LightningElement {
                 sortedValues = config.order.filter(v => valueCounts.has(v));
             } else {
                 sortedValues = [...valueCounts.keys()].sort();
+            }
+
+            // Always include an "(Empty)" option for picklist filters
+            const emptyKey = config.emptyLabel || 'None';
+            if (!valueCounts.has(emptyKey)) {
+                sortedValues.push(emptyKey);
+                valueCounts.set(emptyKey, 0);
             }
 
             const selected = this.fieldFilters[config.key] || new Set();
