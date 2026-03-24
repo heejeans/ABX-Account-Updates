@@ -180,7 +180,7 @@
         <!-- Account cards (same layout as Review tab) -->
         <div class="slds-p-horizontal_medium account-list">
             <template for:each={displayRows} for:item="row">
-                <div key={row.id} class="slds-box slds-m-bottom_xx-small account-card">
+                <div key={row.id} class={row.rowClass}>
                     <div class="slds-grid slds-grid_vertical-align-center">
                         <!-- Checkbox -->
                         <template if:true={row.isActionable}>

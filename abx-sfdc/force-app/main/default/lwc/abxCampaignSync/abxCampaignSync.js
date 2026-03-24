@@ -138,8 +138,8 @@ export default class AbxCampaignSync extends LightningElement {
         return {
             total: rows.length,
             synced: rows.filter(r => r.syncStatus === 'synced').length,
-            toAdd: rows.filter(r => r.syncStatus === 'needs-add' && !this.cpApprovedIds.has(r.id)).length,
-            toRemove: rows.filter(r => r.syncStatus === 'needs-remove' && !this.cpApprovedIds.has(r.id)).length,
+            toAdd: rows.filter(r => r.syncStatus === 'needs-add').length,
+            toRemove: rows.filter(r => r.syncStatus === 'needs-remove').length,
             inCampaign,
         };
     }
@@ -175,7 +175,7 @@ export default class AbxCampaignSync extends LightningElement {
         if (this.filter === 'in-campaign') {
             base = base.filter(r => r.inCampaign && !(this.cpApprovedIds.has(r.id) && r.syncStatus === 'needs-remove'));
         } else if (this.filter === 'needs-add' || this.filter === 'needs-remove') {
-            base = base.filter(r => r.syncStatus === this.filter && !this.cpApprovedIds.has(r.id) && !this.cpRejectedIds.has(r.id));
+            base = base.filter(r => r.syncStatus === this.filter);
         } else {
             base = base.filter(r => r.syncStatus !== 'synced');
         }
@@ -227,7 +227,11 @@ export default class AbxCampaignSync extends LightningElement {
             isCpApproved: this.cpApprovedIds.has(r.id),
             isCpRejected: this.cpRejectedIds.has(r.id),
             isSelected: this.selectedIds.has(r.id),
-            isActionable: this.filter !== 'in-campaign' && r.syncStatus !== 'synced' && !this.cpApprovedIds.has(r.id),
+            isActionable: this.filter !== 'in-campaign' && r.syncStatus !== 'synced'
+                && !this.cpApprovedIds.has(r.id) && !this.cpRejectedIds.has(r.id),
+            rowClass: 'slds-box slds-m-bottom_xx-small account-card'
+                + (this.cpApprovedIds.has(r.id) ? ' account-card_approved' : '')
+                + (this.cpRejectedIds.has(r.id) ? ' account-card_rejected' : ''),
             syncLabel: r.syncStatus === 'needs-add' ? 'Add to Campaign' :
                        r.syncStatus === 'needs-remove' ? 'Remove from Campaign' : 'Synced',
             syncBadgeClass: r.syncStatus === 'needs-add' ? 'slds-badge slds-theme_success' :

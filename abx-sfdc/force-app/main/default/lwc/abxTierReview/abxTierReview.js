@@ -346,8 +346,8 @@ export default class AbxTierReview extends LightningElement {
         }
 
         // Single pass over all accounts
-        let currentABX = 0, pendingAdds = 0, pendingRemoves = 0,
-            pendingReclassifies = 0, unassignedAE = 0;
+        let currentABX = 0, totalAdds = 0, totalRemoves = 0,
+            totalReclassifies = 0, unassignedAE = 0;
         const currentTiers = { 'Tier 1': 0, 'Tier 2': 0, 'Tier 3': 0 };
         const finalTiers = { 'Tier 1': 0, 'Tier 2': 0, 'Tier 3': 0 };
         const approved = this.approvedIds;
@@ -364,11 +364,10 @@ export default class AbxTierReview extends LightningElement {
                 if (!a.accountExecutiveName) unassignedAE++;
             }
 
-            if (isPending) {
-                if (a.action === 'Add') pendingAdds++;
-                else if (a.action === 'Remove') pendingRemoves++;
-                else if (a.action === 'Reclassify') pendingReclassifies++;
-            }
+            // Count all accounts per action (not just pending)
+            if (a.action === 'Add') totalAdds++;
+            else if (a.action === 'Remove') totalRemoves++;
+            else if (a.action === 'Reclassify') totalReclassifies++;
 
             // Current tier distribution
             if (a.currentTier && currentTiers.hasOwnProperty(a.currentTier)) {
@@ -391,14 +390,14 @@ export default class AbxTierReview extends LightningElement {
             }
         }
 
-        const estimatedFinalABX = currentABX + pendingAdds - pendingRemoves;
+        const estimatedFinalABX = currentABX + totalAdds - totalRemoves;
         const result = {
             currentABX,
             estimatedFinalABX,
             netChange: estimatedFinalABX - currentABX,
-            adds: pendingAdds,
-            removes: pendingRemoves,
-            reclassifies: pendingReclassifies,
+            adds: totalAdds,
+            removes: totalRemoves,
+            reclassifies: totalReclassifies,
             unassignedAE,
             approvedCount: approved.size,
             tierDistribution: { current: currentTiers, final: finalTiers },
@@ -483,7 +482,6 @@ export default class AbxTierReview extends LightningElement {
                 include = !!a.currentTier && !a.accountExecutiveName;
             } else if (ACTIONABLE_ACTIONS.has(filter)) {
                 include = a.action === filter
-                    && !approved.has(a.id) && !rejected.has(a.id)
                     && (!reasonFilter || this._getRuleGroup(a) === reasonFilter);
             } else {
                 include = true;
