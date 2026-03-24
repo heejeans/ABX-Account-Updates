@@ -1,6 +1,11 @@
 <template>
     <div class="campaign-sync">
 
+        <!-- Invisible backdrop: closes filter panel when clicked outside -->
+        <template if:true={hasAnyOverlay}>
+            <div class="click-backdrop" onclick={handleBackdropClick}></div>
+        </template>
+
         <!-- Campaign title row with link -->
         <template if:true={hasCampaignData}>
             <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center slds-p-horizontal_medium slds-p-vertical_x-small campaign-header">

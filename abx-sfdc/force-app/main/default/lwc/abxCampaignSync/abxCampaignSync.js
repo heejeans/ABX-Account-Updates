@@ -98,9 +98,24 @@ export default class AbxCampaignSync extends LightningElement {
     @track searchTerm = '';
     @track filter = 'in-campaign';   // default to "Currently in Campaign"
     @track selectedIds = new Set();
-    @track fieldFilters = {};
+    @track _allFieldFilters = {};   // { 'in-campaign': { ... }, 'needs-add': { ... }, ... }
     @track filterPanelOpen = false;
     @track activeFilterCategory = null;
+
+    get fieldFilters() {
+        return this._allFieldFilters[this.filter] || {};
+    }
+    set fieldFilters(val) {
+        this._allFieldFilters = { ...this._allFieldFilters, [this.filter]: val };
+    }
+
+    get hasAnyOverlay() {
+        return this.filterPanelOpen;
+    }
+
+    handleBackdropClick() {
+        this.filterPanelOpen = false;
+    }
 
     // ─── Computed: campaign member set ────────────────────────────────────────
 
@@ -367,11 +382,8 @@ export default class AbxCampaignSync extends LightningElement {
 
     handleToggleFilterPanel() {
         this.filterPanelOpen = !this.filterPanelOpen;
-        if (this.filterPanelOpen) {
-            this._justOpened = true;
-            if (!this.activeFilterCategory && this.filterCategories.length > 0) {
-                this.activeFilterCategory = this.filterCategories[0].key;
-            }
+        if (this.filterPanelOpen && !this.activeFilterCategory && this.filterCategories.length > 0) {
+            this.activeFilterCategory = this.filterCategories[0].key;
         }
     }
 
@@ -623,32 +635,5 @@ export default class AbxCampaignSync extends LightningElement {
         if (el) el.classList.toggle('slds-hide');
     }
 
-    // ─── Close filter panel on outside click ──────────────────────────────────
 
-    handleBodyClick(event) {
-        if (!this.filterPanelOpen) return;
-        // Skip the same click that opened the panel
-        if (this._justOpened) {
-            this._justOpened = false;
-            return;
-        }
-        // Check if click was inside the filter panel or toggle button
-        const panel = this.template.querySelector('.filter-panel');
-        const btn = this.template.querySelector('.filter-toggle-btn');
-        const path = event.composedPath();
-        const isFilterClick = (panel && path.includes(panel))
-            || (btn && path.includes(btn));
-        if (!isFilterClick) {
-            this.filterPanelOpen = false;
-        }
-    }
-
-    connectedCallback() {
-        this._bodyClickHandler = this.handleBodyClick.bind(this);
-        document.addEventListener('click', this._bodyClickHandler);
-    }
-
-    disconnectedCallback() {
-        document.removeEventListener('click', this._bodyClickHandler);
-    }
 }
