@@ -367,8 +367,11 @@ export default class AbxCampaignSync extends LightningElement {
 
     handleToggleFilterPanel() {
         this.filterPanelOpen = !this.filterPanelOpen;
-        if (this.filterPanelOpen && !this.activeFilterCategory && this.filterCategories.length > 0) {
-            this.activeFilterCategory = this.filterCategories[0].key;
+        if (this.filterPanelOpen) {
+            this._justOpened = true;
+            if (!this.activeFilterCategory && this.filterCategories.length > 0) {
+                this.activeFilterCategory = this.filterCategories[0].key;
+            }
         }
     }
 
@@ -623,22 +626,20 @@ export default class AbxCampaignSync extends LightningElement {
     // ─── Close filter panel on outside click ──────────────────────────────────
 
     handleBodyClick(event) {
-        if (this.filterPanelOpen) {
-            // Check if click was inside this component's shadow DOM
-            const host = this.template.host;
-            if (!host || !host.contains(event.target)) {
-                this.filterPanelOpen = false;
-                return;
-            }
-            // Click was inside the component — check if it was outside the filter area
-            const path = event.composedPath();
-            const isFilterClick = path.some(el =>
-                el.classList && (el.classList.contains('filter-panel')
-                    || el.classList.contains('filter-toggle-btn'))
-            );
-            if (!isFilterClick) {
-                this.filterPanelOpen = false;
-            }
+        if (!this.filterPanelOpen) return;
+        // Skip the same click that opened the panel
+        if (this._justOpened) {
+            this._justOpened = false;
+            return;
+        }
+        // Check if click was inside the filter panel or toggle button
+        const panel = this.template.querySelector('.filter-panel');
+        const btn = this.template.querySelector('.filter-toggle-btn');
+        const path = event.composedPath();
+        const isFilterClick = (panel && path.includes(panel))
+            || (btn && path.includes(btn));
+        if (!isFilterClick) {
+            this.filterPanelOpen = false;
         }
     }
 
