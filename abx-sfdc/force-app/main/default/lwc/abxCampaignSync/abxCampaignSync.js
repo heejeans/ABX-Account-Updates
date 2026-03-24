@@ -624,12 +624,19 @@ export default class AbxCampaignSync extends LightningElement {
 
     handleBodyClick(event) {
         if (this.filterPanelOpen) {
+            // Check if click was inside this component's shadow DOM
+            const host = this.template.host;
+            if (!host || !host.contains(event.target)) {
+                this.filterPanelOpen = false;
+                return;
+            }
+            // Click was inside the component — check if it was outside the filter area
             const path = event.composedPath();
-            const panel = this.template.querySelector('.filter-panel');
-            const btn = this.template.querySelector('.filter-toggle-btn');
-            const clickedPanel = panel && path.includes(panel);
-            const clickedBtn = btn && path.includes(btn);
-            if (!clickedPanel && !clickedBtn) {
+            const isFilterClick = path.some(el =>
+                el.classList && (el.classList.contains('filter-panel')
+                    || el.classList.contains('filter-toggle-btn'))
+            );
+            if (!isFilterClick) {
                 this.filterPanelOpen = false;
             }
         }
