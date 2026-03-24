@@ -22,7 +22,7 @@ public class ABXTierService {
         'Parent is Customer', 'Parent in Pipeline'
     };
 
-    private static final Date CLOSED_LOST_CUTOFF = Date.newInstance(2025, 8, 1);
+    private static final Date CLOSED_LOST_CUTOFF = Date.today().addMonths(-6);
 
     // ─── Inner class for evaluation result ──────────────────────────────────────
 
@@ -139,7 +139,7 @@ public class ABXTierService {
                 eval.recommendedTier = null;
                 eval.intentLevel = classifyIntent(acct.Account_Intent__c);
                 eval.reason = 'Account is Closed Lost as of ' + String.valueOf(closedLostDate)
-                    + ' (on or after Aug 1, 2025). Recently closed lost accounts with an existing tier ('
+                    + ' (within the past 6 months). Recently closed lost accounts with an existing tier ('
                     + currentTier + ') should be removed from ABX targeting.';
                 return eval;
             }
@@ -151,7 +151,7 @@ public class ABXTierService {
                 eval.recommendedTier = null;
                 eval.intentLevel = classifyIntent(acct.Account_Intent__c);
                 eval.reason = 'Account is Closed Lost as of ' + String.valueOf(closedLostDate)
-                    + ' (on or after Aug 1, 2025). Too recent to re-target — no tier assigned.';
+                    + ' (within the past 6 months). Too recent to re-target — no tier assigned.';
                 return eval;
             }
             // Closed lost before cutoff or no date → fall through to matrix
@@ -165,7 +165,7 @@ public class ABXTierService {
         String closedLostPrefix = '';
         if (isClosedLost && closedLostDate != null && closedLostDate < CLOSED_LOST_CUTOFF) {
             closedLostPrefix = 'Account has been Closed Lost since ' + String.valueOf(closedLostDate)
-                + ' (before Aug 1, 2025) — eligible for re-targeting. ';
+                + ' (more than 6 months ago) — eligible for re-targeting. ';
         }
 
         // Step 5: Determine action

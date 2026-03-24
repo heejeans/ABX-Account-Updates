@@ -196,20 +196,20 @@ private class ABXTierServiceTest {
         Account a = buildAccount(new Map<String, Object>{
             'Account_Stage__c' => 'Closed Lost',
             'ABX_Tier__c' => 'Tier 1',
-            'Entered_Closed_Lost_Date__c' => '2025-09-15'
+            'Entered_Closed_Lost_Date__c' => Date.today().addMonths(-2)
         });
 
         ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
         System.assertEquals('Remove', eval.action);
         System.assert(eval.reason.contains('Closed Lost'), 'Should mention Closed Lost');
-        System.assert(eval.reason.contains('on or after Aug 1, 2025'), 'Should mention cutoff');
+        System.assert(eval.reason.contains('within the past 6 months'), 'Should mention 6-month window');
     }
 
     @isTest
     static void testClosedLost_RecentNoTier_Ignore() {
         Account a = buildAccount(new Map<String, Object>{
             'Account_Stage__c' => 'Closed Lost',
-            'Entered_Closed_Lost_Date__c' => '2025-10-01'
+            'Entered_Closed_Lost_Date__c' => Date.today().addMonths(-1)
         });
 
         ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
@@ -221,7 +221,7 @@ private class ABXTierServiceTest {
     static void testClosedLost_OldFallsToMatrix() {
         Account a = buildAccount(new Map<String, Object>{
             'Account_Stage__c' => 'Closed Lost',
-            'Entered_Closed_Lost_Date__c' => '2025-03-01',
+            'Entered_Closed_Lost_Date__c' => Date.today().addMonths(-9),
             'Fit_Score_Total__c' => 12,
             'Account_Intent__c' => 'High'
         });
