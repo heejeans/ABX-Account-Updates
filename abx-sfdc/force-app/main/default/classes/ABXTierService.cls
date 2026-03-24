@@ -22,6 +22,10 @@ public class ABXTierService {
         'Parent is Customer', 'Parent in Pipeline'
     };
 
+    private static final Set<String> EXCLUDE_TERRITORIES = new Set<String>{
+        'APAC', 'LATAM'
+    };
+
     private static final Date CLOSED_LOST_CUTOFF = Date.today().addMonths(-6);
 
     // ─── Inner class for evaluation result ──────────────────────────────────────
@@ -267,6 +271,10 @@ public class ABXTierService {
         }
         if (acct.Sales_Segment__c == 'Commercial' || acct.Sales_Segment__c == 'Mid-Market') {
             reasons.add('Sales segment is ' + acct.Sales_Segment__c + ' (excluded from ABX targeting)');
+        }
+        if (acct.AE_Territory__c != null && EXCLUDE_TERRITORIES.contains(acct.AE_Territory__c)
+                && acct.Marketplace_Prospect__c != true) {
+            reasons.add('AE Territory is ' + acct.AE_Territory__c + ' (excluded from ABX targeting)');
         }
         if (acct.Type != 'Standard') {
             reasons.add('Account type is ' + (acct.Type != null ? acct.Type : '(blank)') + ' (must be Standard for ABX targeting)');
