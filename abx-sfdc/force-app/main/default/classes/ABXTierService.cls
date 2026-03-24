@@ -220,9 +220,6 @@ public class ABXTierService {
     private static List<String> shouldExcludeStrict(Account acct) {
         List<String> reasons = new List<String>();
 
-        if (acct.Name != null && acct.Name.toLowerCase().contains('amazon')) {
-            reasons.add('Account name contains "Amazon" (excluded from ABX targeting)');
-        }
         if (hasValue(acct.Qualified_Out_Detail__c) || hasValue(acct.Qualified_Out_Date__c) || hasValue(acct.Qualified_Out_Reason__c)) {
             List<String> parts = new List<String>();
             if (hasValue(acct.Qualified_Out_Detail__c))  parts.add('detail: ' + acct.Qualified_Out_Detail__c);
