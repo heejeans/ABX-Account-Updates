@@ -113,20 +113,52 @@ export default class AbxCampaignSync extends LightningElement {
 
     get allRows() {
         const ms = this.memberSet;
-        return this.accounts
-            .filter(a => a.action !== 'Ignore')
-            .map(a => {
-                const inCampaign = ms.has(a.id);
-                const tier = effectiveTier(a, this.approvedIds, this.rejectedIds);
-                const inFinalABX = !!tier;
-                let syncStatus;
-                if (inCampaign && inFinalABX) syncStatus = 'synced';
-                else if (!inCampaign && inFinalABX) syncStatus = 'needs-add';
-                else if (inCampaign && !inFinalABX) syncStatus = 'needs-remove';
-                else return null;
-                return { ...a, inCampaign, inFinalABX, syncStatus, effectiveTier: tier };
-            })
-            .filter(Boolean);
+        const rows = [];
+        const seenIds = new Set();
+
+        // 1. Process all accounts from the review data
+        for (const a of this.accounts) {
+            if (a.action === 'Ignore') continue;
+            seenIds.add(a.id);
+            const inCampaign = ms.has(a.id);
+            const tier = effectiveTier(a, this.approvedIds, this.rejectedIds);
+            const inFinalABX = !!tier;
+            let syncStatus;
+            if (inCampaign && inFinalABX) syncStatus = 'synced';
+            else if (!inCampaign && inFinalABX) syncStatus = 'needs-add';
+            else if (inCampaign && !inFinalABX) syncStatus = 'needs-remove';
+            else continue;
+            rows.push({ ...a, inCampaign, inFinalABX, syncStatus, effectiveTier: tier });
+        }
+
+        // 2. Campaign members NOT in the review data — these are in the campaign
+        //    but have no tier / don't qualify, so they need to be removed.
+        if (this.campaignData?.members) {
+            for (const m of this.campaignData.members) {
+                if (seenIds.has(m.accountId)) continue;
+                rows.push({
+                    id: m.accountId,
+                    name: m.accountName || m.accountId,
+                    inCampaign: true,
+                    inFinalABX: false,
+                    syncStatus: 'needs-remove',
+                    effectiveTier: null,
+                    currentTier: null,
+                    recommendedTier: null,
+                    action: 'Remove',
+                    intent: null,
+                    stage: null,
+                    isDnn: false,
+                    fitScore: null,
+                    segment: null,
+                    aeTerritory: null,
+                    accountExecutiveName: null,
+                    accountDevOwnerName: null,
+                });
+            }
+        }
+
+        return rows;
     }
 
     // ─── Computed: stats ──────────────────────────────────────────────────────
