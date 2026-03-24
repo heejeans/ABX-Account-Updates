@@ -1262,7 +1262,10 @@ export default class AbxTierReview extends LightningElement {
             this.approvedIds = new Set();
             this.rejectedIds = new Set();
             this.selectedIds = new Set();
-            await refreshApex(this._wiredAccountResult);
+            await Promise.all([
+                refreshApex(this._wiredAccountResult),
+                refreshApex(this._wiredCampaignResult),
+            ]);
         } catch (error) {
             this.showToast('Error', 'Failed to apply changes: ' + this.reduceErrors(error), 'error');
         } finally {
@@ -1396,7 +1399,11 @@ export default class AbxTierReview extends LightningElement {
 
             this.cpApprovedIds = new Set();
             this.cpRejectedIds = new Set();
-            await refreshApex(this._wiredCampaignResult);
+            this._invalidateCaches();
+            await Promise.all([
+                refreshApex(this._wiredAccountResult),
+                refreshApex(this._wiredCampaignResult),
+            ]);
         } catch (error) {
             this.showToast('Error', 'Campaign sync failed: ' + this.reduceErrors(error), 'error');
         } finally {
