@@ -1223,22 +1223,46 @@ export default class AbxTierReview extends LightningElement {
                 return;
             }
 
-            const result = await applyTierChanges({ changesJson: JSON.stringify(changes) });
+            // Batch in chunks of 100 to avoid CPU time limits
+            const BATCH_SIZE = 100;
+            let totalAdded = 0, totalRemoved = 0, totalUpdated = 0;
+            const allErrors = [];
 
-            if (result.ok) {
+            for (let i = 0; i < changes.length; i += BATCH_SIZE) {
+                const batch = changes.slice(i, i + BATCH_SIZE);
+                const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+                const totalBatches = Math.ceil(changes.length / BATCH_SIZE);
+
+                if (totalBatches > 1) {
+                    this.showToast('Info',
+                        `Processing batch ${batchNum} of ${totalBatches} (${batch.length} accounts)...`,
+                        'info');
+                }
+
+                const result = await applyTierChanges({ changesJson: JSON.stringify(batch) });
+                totalAdded += result.added || 0;
+                totalRemoved += result.removed || 0;
+                totalUpdated += result.updated || 0;
+                if (result.errors && result.errors.length) {
+                    allErrors.push(...result.errors);
+                }
+            }
+
+            if (allErrors.length === 0) {
                 this.showToast('Success',
-                    `Tier changes applied: ${result.added} added, ${result.removed} removed, ${result.updated} updated.`,
+                    `Tier changes applied: ${totalAdded} added, ${totalRemoved} removed, ${totalUpdated} updated.`,
                     'success');
-                this._invalidateCaches();
-                this.approvedIds = new Set();
-                this.rejectedIds = new Set();
-                this.selectedIds = new Set();
-                await refreshApex(this._wiredAccountResult);
             } else {
                 this.showToast('Warning',
-                    `Changes applied with errors: ${result.errors.join('; ')}`,
+                    `Changes applied with ${allErrors.length} error(s): ${allErrors.slice(0, 5).join('; ')}`,
                     'warning');
             }
+
+            this._invalidateCaches();
+            this.approvedIds = new Set();
+            this.rejectedIds = new Set();
+            this.selectedIds = new Set();
+            await refreshApex(this._wiredAccountResult);
         } catch (error) {
             this.showToast('Error', 'Failed to apply changes: ' + this.reduceErrors(error), 'error');
         } finally {
@@ -1337,19 +1361,42 @@ export default class AbxTierReview extends LightningElement {
         this.isApplying = true;
 
         try {
-            const result = await syncCampaignMembership({ changesJson: JSON.stringify(changes) });
-            if (result.ok) {
+            const BATCH_SIZE = 100;
+            let totalAdded = 0, totalRemoved = 0;
+            const allErrors = [];
+
+            for (let i = 0; i < changes.length; i += BATCH_SIZE) {
+                const batch = changes.slice(i, i + BATCH_SIZE);
+                const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+                const totalBatches = Math.ceil(changes.length / BATCH_SIZE);
+
+                if (totalBatches > 1) {
+                    this.showToast('Info',
+                        `Processing batch ${batchNum} of ${totalBatches} (${batch.length} accounts)...`,
+                        'info');
+                }
+
+                const result = await syncCampaignMembership({ changesJson: JSON.stringify(batch) });
+                totalAdded += result.added || 0;
+                totalRemoved += result.removed || 0;
+                if (result.errors && result.errors.length) {
+                    allErrors.push(...result.errors);
+                }
+            }
+
+            if (allErrors.length === 0) {
                 this.showToast('Success',
-                    `Campaign sync complete: ${result.added} added, ${result.removed} removed.`,
+                    `Campaign sync complete: ${totalAdded} added, ${totalRemoved} removed.`,
                     'success');
-                this.cpApprovedIds = new Set();
-                this.cpRejectedIds = new Set();
-                await refreshApex(this._wiredCampaignResult);
             } else {
                 this.showToast('Warning',
-                    `Campaign sync with errors: ${result.errors.join('; ')}`,
+                    `Campaign sync with ${allErrors.length} error(s): ${allErrors.slice(0, 5).join('; ')}`,
                     'warning');
             }
+
+            this.cpApprovedIds = new Set();
+            this.cpRejectedIds = new Set();
+            await refreshApex(this._wiredCampaignResult);
         } catch (error) {
             this.showToast('Error', 'Campaign sync failed: ' + this.reduceErrors(error), 'error');
         } finally {
