@@ -678,8 +678,6 @@ export default class AbxTierReview extends LightningElement {
                 valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
             }
 
-            if (valueCounts.size <= 1) continue;
-
             let sortedValues;
             if (config.order) {
                 sortedValues = config.order.filter(v => valueCounts.has(v));

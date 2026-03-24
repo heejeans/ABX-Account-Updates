@@ -333,8 +333,6 @@ export default class AbxCampaignSync extends LightningElement {
                 const val = getFieldValue(a, config);
                 valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
             });
-            if (valueCounts.size <= 1) return null;
-
             let sortedValues;
             if (config.order) {
                 sortedValues = config.order.filter(v => valueCounts.has(v));
