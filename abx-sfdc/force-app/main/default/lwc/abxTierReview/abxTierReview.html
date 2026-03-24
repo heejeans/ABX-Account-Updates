@@ -472,6 +472,52 @@
                                 </template>
                             </div>
 
+                            <!-- Sort button (Current ABX + No AE only) -->
+                            <template if:true={showSortButton}>
+                                <div class="slds-is-relative slds-m-right_x-small sort-toggle-btn">
+                                    <lightning-button
+                                        label={sortButtonLabel}
+                                        icon-name="utility:sort"
+                                        variant={sortButtonVariant}
+                                        onclick={handleToggleSortPanel}
+                                    ></lightning-button>
+                                    <template if:true={sortPanelOpen}>
+                                        <div class="sort-panel slds-box slds-theme_default">
+                                            <div class="slds-grid slds-grid_align-spread slds-m-bottom_x-small">
+                                                <span class="slds-text-title_caps">Sort by</span>
+                                                <template if:true={currentSortState}>
+                                                    <lightning-button
+                                                        label="Clear"
+                                                        variant="base"
+                                                        onclick={handleClearSort}
+                                                    ></lightning-button>
+                                                </template>
+                                            </div>
+                                            <template for:each={sortPanelOptions} for:item="so">
+                                                <div
+                                                    key={so.value}
+                                                    class={so.optionClass}
+                                                    data-value={so.value}
+                                                    onclick={handleSortSelect}
+                                                >
+                                                    <span class="sort-option__label">
+                                                        {so.label}
+                                                    </span>
+                                                    <template if:true={so.isActive}>
+                                                        <template if:true={so.showDirectionToggle}>
+                                                            <span class="sort-direction">
+                                                                <template if:true={so.isAsc}>↑ Asc</template>
+                                                                <template if:true={so.isDesc}>↓ Desc</template>
+                                                            </span>
+                                                        </template>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
                             <lightning-input
                                 type="search"
                                 placeholder="Search by account name…"

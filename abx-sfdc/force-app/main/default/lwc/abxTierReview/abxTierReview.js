@@ -37,6 +37,50 @@ const FIELD_CONFIGS = [
     { key: 'aeStatus', label: 'AE Assigned', field: null, filterType: 'picklist' },
 ];
 
+// Sort option definitions — field maps to the row property, sortType drives comparison
+const SORT_OPTIONS = [
+    { value: 'name', label: 'Account Name', field: 'name', sortType: 'text' },
+    { value: 'fitScore', label: 'Fit Score', field: 'fitScore', sortType: 'number' },
+    { value: 'intent', label: 'Intent', field: 'intent', sortType: 'ordinal', order: ['High', 'Medium', 'Low', 'None', '', null] },
+    { value: 'currentTier', label: 'ABX Tier', field: 'currentTier', sortType: 'ordinal', order: ['Tier 1', 'Tier 2', 'Tier 3', '', null] },
+    { value: 'recommendedTier', label: 'Projected Tier', field: 'recommendedTier', sortType: 'ordinal', order: ['Tier 1', 'Tier 2', 'Tier 3', '', null] },
+    { value: 'stage', label: 'Account Stage', field: 'stage', sortType: 'text' },
+    { value: 'segment', label: 'Sales Segment', field: 'segment', sortType: 'text' },
+    { value: 'aeTerritory', label: 'AE Territory', field: 'aeTerritory', sortType: 'text' },
+    { value: 'accountExecutiveName', label: 'Account Executive', field: 'accountExecutiveName', sortType: 'text' },
+    { value: 'accountDevOwnerName', label: 'SDR', field: 'accountDevOwnerName', sortType: 'text' },
+    { value: 'dnn', label: 'DNN', field: 'isDnn', sortType: 'boolean' },
+    { value: 'random', label: 'Random', field: null, sortType: 'random' },
+];
+
+function sortComparator(a, b, option, direction) {
+    const { sortType, field, order } = option;
+    if (sortType === 'random') return Math.random() - 0.5;
+
+    let va = field ? a[field] : null;
+    let vb = field ? b[field] : null;
+
+    // Nulls/blanks always sort to the bottom regardless of direction
+    const aEmpty = va == null || va === '';
+    const bEmpty = vb == null || vb === '';
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+
+    let cmp = 0;
+    if (sortType === 'number') {
+        cmp = (Number(va) || 0) - (Number(vb) || 0);
+    } else if (sortType === 'ordinal' && order) {
+        cmp = order.indexOf(va) - order.indexOf(vb);
+    } else if (sortType === 'boolean') {
+        cmp = (vb ? 1 : 0) - (va ? 1 : 0); // true first
+    } else {
+        // text — case insensitive
+        cmp = String(va).toLowerCase().localeCompare(String(vb).toLowerCase());
+    }
+    return direction === 'desc' ? -cmp : cmp;
+}
+
 const NUMBER_OPERATORS = [
     { value: 'eq', label: 'equals' },
     { value: 'neq', label: 'not equal to' },
@@ -181,6 +225,10 @@ export default class AbxTierReview extends LightningElement {
     @track _allFieldFilters = {};   // { 'Current ABX': { intent: Set([...]) }, 'Add': { ... }, ... }
     @track filterPanelOpen = false;
     @track activeFilterCategory = null;
+
+    // Sort state — scoped per view
+    @track _allSortState = {};   // { 'Current ABX': { field: 'name', direction: 'asc' }, ... }
+    @track sortPanelOpen = false;
 
     get fieldFilters() {
         return this._allFieldFilters[this.activeFilter] || {};
@@ -500,11 +548,13 @@ export default class AbxTierReview extends LightningElement {
     }
 
     get filteredAccounts() {
+        const sortState = this.currentSortState;
         if (this._fDep1 === this.baseFilteredAccounts
             && this._fDep2 === this.fieldFilters
             && this._fDep3 === this.searchTerm
             && this._fDep4 === this.dynamicFieldValues
             && this._fDep5 === this.dynamicFilterFields
+            && this._fDep6 === sortState
             && this._cachedFiltered) {
             return this._cachedFiltered;
         }
@@ -563,12 +613,21 @@ export default class AbxTierReview extends LightningElement {
             base = searched;
         }
 
+        // Apply sort
+        if (sortState) {
+            const opt = SORT_OPTIONS.find(o => o.value === sortState.field);
+            if (opt) {
+                base = [...base].sort((a, b) => sortComparator(a, b, opt, sortState.direction));
+            }
+        }
+
         this._cachedFiltered = base;
         this._fDep1 = this.baseFilteredAccounts;
         this._fDep2 = this.fieldFilters;
         this._fDep3 = this.searchTerm;
         this._fDep4 = this.dynamicFieldValues;
         this._fDep5 = this.dynamicFilterFields;
+        this._fDep6 = sortState;
         return base;
     }
 
@@ -1046,6 +1105,99 @@ export default class AbxTierReview extends LightningElement {
     handleReasonClick(event) {
         const reason = event.currentTarget.dataset.reason;
         this.activeReasonFilter = this.activeReasonFilter === reason ? null : reason;
+    }
+
+    // ─── Sort ──────────────────────────────────────────────────────────────
+
+    get showSortButton() {
+        return this.isCurrentABXFilter || this.isUnassignedAEFilter;
+    }
+
+    get currentSortState() {
+        return this._allSortState[this.activeFilter] || null;
+    }
+
+    get sortOptions() {
+        return SORT_OPTIONS;
+    }
+
+    get sortButtonLabel() {
+        const state = this.currentSortState;
+        if (!state) return 'Sort';
+        const opt = SORT_OPTIONS.find(o => o.value === state.field);
+        if (!opt) return 'Sort';
+        const dir = state.direction === 'desc' ? '↓' : '↑';
+        return `Sort: ${opt.label} ${dir}`;
+    }
+
+    get sortButtonVariant() {
+        return this.currentSortState ? 'brand' : 'neutral';
+    }
+
+    get sortPanelOptions() {
+        const state = this.currentSortState;
+        return SORT_OPTIONS.map(opt => {
+            const isActive = state && state.field === opt.value;
+            return {
+                ...opt,
+                isActive,
+                optionClass: 'sort-option' + (isActive ? ' sort-option_active' : ''),
+                showDirectionToggle: opt.sortType !== 'random',
+                isAsc: isActive && state.direction === 'asc',
+                isDesc: isActive && state.direction === 'desc',
+            };
+        });
+    }
+
+    handleToggleSortPanel() {
+        this.sortPanelOpen = !this.sortPanelOpen;
+    }
+
+    handleSortSelect(event) {
+        const field = event.currentTarget.dataset.value;
+        const state = this.currentSortState;
+
+        if (field === 'random') {
+            // Random — store a seed so it re-shuffles each time
+            this._allSortState = {
+                ...this._allSortState,
+                [this.activeFilter]: { field: 'random', direction: 'asc', seed: Date.now() },
+            };
+            this._invalidateSortCache();
+            this.sortPanelOpen = false;
+            return;
+        }
+
+        if (state && state.field === field) {
+            // Toggle direction
+            const newDir = state.direction === 'asc' ? 'desc' : 'asc';
+            this._allSortState = {
+                ...this._allSortState,
+                [this.activeFilter]: { field, direction: newDir },
+            };
+        } else {
+            // New field — default asc, except number defaults desc
+            const opt = SORT_OPTIONS.find(o => o.value === field);
+            const defaultDir = opt && opt.sortType === 'number' ? 'desc' : 'asc';
+            this._allSortState = {
+                ...this._allSortState,
+                [this.activeFilter]: { field, direction: defaultDir },
+            };
+        }
+        this._invalidateSortCache();
+    }
+
+    handleClearSort() {
+        const newState = { ...this._allSortState };
+        delete newState[this.activeFilter];
+        this._allSortState = newState;
+        this._invalidateSortCache();
+        this.sortPanelOpen = false;
+    }
+
+    _invalidateSortCache() {
+        // Force filteredAccounts to recompute by invalidating cache deps
+        this._cachedFiltered = null;
     }
 
     // ─── Search (debounced) ───────────────────────────────────────────────
@@ -1815,7 +1967,7 @@ export default class AbxTierReview extends LightningElement {
     // listener + composedPath(), which doesn't work in LWC shadow DOM.
 
     get hasAnyOverlay() {
-        return this.filterPanelOpen || !!this.activeAEDropdownId || this.bulkAEPickerOpen
+        return this.filterPanelOpen || this.sortPanelOpen || !!this.activeAEDropdownId || this.bulkAEPickerOpen
             || this.showDynamicFieldPicker || this.showDetailFieldPicker
             || this.bulkUpdatePickerOpen;
     }
@@ -1823,6 +1975,9 @@ export default class AbxTierReview extends LightningElement {
     handleBackdropClick() {
         if (this.filterPanelOpen) {
             this.filterPanelOpen = false;
+        }
+        if (this.sortPanelOpen) {
+            this.sortPanelOpen = false;
         }
         if (this.showDynamicFieldPicker) {
             this.showDynamicFieldPicker = false;

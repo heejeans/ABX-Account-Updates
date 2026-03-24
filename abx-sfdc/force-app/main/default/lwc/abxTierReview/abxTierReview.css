@@ -78,6 +78,56 @@ slot {
     background: transparent;
 }
 
+/* ── Sort Panel ──────────────────────────────────────────────────────── */
+
+.sort-toggle-btn {
+    z-index: 100;
+}
+
+.sort-panel {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    z-index: 200;
+    width: 240px;
+    max-height: 360px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+    border-radius: 8px;
+    margin-bottom: 4px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.sort-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.12s;
+}
+
+.sort-option:hover {
+    background: #f3f3f5;
+}
+
+.sort-option_active {
+    background: #eef4ff;
+    font-weight: 600;
+}
+
+.sort-option_active:hover {
+    background: #e0ecff;
+}
+
+.sort-direction {
+    font-size: 0.75rem;
+    color: #0070d2;
+    font-weight: 600;
+}
+
 /* ── Field Filter Panel ───────────────────────────────────────────────── */
 
 .filter-panel {
