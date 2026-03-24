@@ -956,6 +956,9 @@ export default class AbxTierReview extends LightningElement {
                 isSelectable: base._isActionableType || isUnassignedAE || isCurrentABX,
                 statusLabel: isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending',
                 statusClass: isApproved ? 'slds-text-color_success' : isRejected ? 'slds-text-color_error' : '',
+                rowClass: 'slds-box slds-m-bottom_xx-small account-card'
+                    + (isApproved ? ' account-card_approved' : '')
+                    + (isRejected ? ' account-card_rejected' : ''),
                 aeSearchTerm: aeTerms[id] || '',
                 showAEDropdown: activeDropdown === id,
                 // Only compute filtered AE users for the single row with open dropdown
@@ -1115,9 +1118,8 @@ export default class AbxTierReview extends LightningElement {
     }
 
     get actionableRows() {
-        const approved = this.approvedIds;
         return this.filteredAccounts.filter(a =>
-            ACTIONABLE_ACTIONS.has(a.action) && !approved.has(a.id)
+            ACTIONABLE_ACTIONS.has(a.action)
         );
     }
 

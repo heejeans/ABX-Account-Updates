@@ -28,6 +28,19 @@ slot {
     background-color: #f3f4f6;
 }
 
+.account-card_approved {
+    opacity: 0.55;
+    background-color: #f0fdf4;
+    border-left: 3px solid #22c55e;
+}
+
+.account-card_rejected {
+    opacity: 0.45;
+    background-color: #fef2f2;
+    border-left: 3px solid #ef4444;
+    text-decoration: line-through;
+}
+
 .account-name {
     font-weight: 600;
     font-size: 14px;

@@ -487,7 +487,7 @@
                     <!-- Account cards -->
                     <div class="slds-p-horizontal_medium account-list">
                         <template for:each={datatableRows} for:item="row">
-                            <div key={row.id} class="slds-box slds-m-bottom_xx-small account-card">
+                            <div key={row.id} class={row.rowClass}>
                                 <div class="slds-grid slds-grid_vertical-align-center">
                                     <!-- Checkbox (selectable rows: actionable or Unassigned AE) -->
                                     <template if:true={row.isSelectable}>
