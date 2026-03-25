@@ -218,7 +218,7 @@ public class ABXTierService {
 
     /**
      * Strict exclusions that apply even to Focus Accounts.
-     * Bypassed for Focus Accounts: isDefunct, Sales Segment, parent account, consulting/IT filter.
+     * Bypassed for Focus Accounts: isDefunct, Sales Segment, parent account, consulting/IT filter, APAC/LATAM territory.
      * Still blocks: qualified out, excluded stages, non-Standard type.
      */
     private static List<String> shouldExcludeStrict(Account acct) {
@@ -272,9 +272,11 @@ public class ABXTierService {
         if (acct.Sales_Segment__c == 'Commercial' || acct.Sales_Segment__c == 'Mid-Market') {
             reasons.add('Sales segment is ' + acct.Sales_Segment__c + ' (excluded from ABX targeting)');
         }
-        if (acct.AE_Territory__c != null && EXCLUDE_TERRITORIES.contains(acct.AE_Territory__c)
-                && acct.Marketplace_Prospect__c != true) {
-            reasons.add('AE Territory is ' + acct.AE_Territory__c + ' (excluded from ABX targeting)');
+        if (acct.AE_Territory__c == 'LATAM') {
+            reasons.add('AE Territory is LATAM (excluded from ABX targeting)');
+        }
+        if (acct.AE_Territory__c == 'APAC' && acct.Marketplace_Prospect__c != true) {
+            reasons.add('AE Territory is APAC (excluded from ABX targeting)');
         }
         if (acct.Type != 'Standard') {
             reasons.add('Account type is ' + (acct.Type != null ? acct.Type : '(blank)') + ' (must be Standard for ABX targeting)');
