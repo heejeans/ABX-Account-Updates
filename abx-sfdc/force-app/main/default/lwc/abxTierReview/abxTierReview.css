@@ -446,6 +446,17 @@ slot {
 
 /* ── Bulk Update Panel ──────────────────────────────────────────────── */
 
+.bulk-remove-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 200;
+    width: 320px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
 .bulk-update-panel {
     position: absolute;
     top: 100%;

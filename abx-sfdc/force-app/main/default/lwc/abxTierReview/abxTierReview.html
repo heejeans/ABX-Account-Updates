@@ -162,8 +162,39 @@
                                         </template>
                                     </div>
                                 </template>
-                                <!-- Bulk Field Update (Current ABX view only) -->
+                                <!-- Bulk Remove + Field Update (Current ABX view only) -->
                                 <template if:true={isCurrentABXFilter}>
+                                    <div class="slds-is-relative slds-m-left_x-small bulk-remove-btn">
+                                        <lightning-button
+                                            label="Remove from ABX"
+                                            icon-name="utility:ban"
+                                            variant="destructive"
+                                            onclick={handleBulkRemoveClick}
+                                        ></lightning-button>
+                                        <template if:true={bulkRemoveConfirmOpen}>
+                                            <div class="bulk-remove-panel slds-box slds-theme_default">
+                                                <p class="slds-text-body_small slds-m-bottom_x-small">
+                                                    Are you sure you want to remove <strong>{selectedCount}</strong> account(s) from ABX?
+                                                </p>
+                                                <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
+                                                    This will clear ABX Tier and ABX Account on each selected account.
+                                                </p>
+                                                <div class="slds-grid slds-grid_align-end">
+                                                    <lightning-button
+                                                        label="Cancel"
+                                                        onclick={handleBulkRemoveCancel}
+                                                        class="slds-m-right_xx-small"
+                                                    ></lightning-button>
+                                                    <lightning-button
+                                                        label="Remove"
+                                                        variant="destructive"
+                                                        onclick={handleBulkRemoveConfirm}
+                                                        disabled={isBulkRemoving}
+                                                    ></lightning-button>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
                                     <div class="slds-is-relative slds-m-left_x-small bulk-update-btn">
                                         <lightning-button
                                             label="Update Field"

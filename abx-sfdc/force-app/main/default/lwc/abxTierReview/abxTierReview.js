@@ -272,6 +272,10 @@ export default class AbxTierReview extends LightningElement {
     @track bulkUpdateQueue = []; // Array of { apiName, label, value, displayValue }
     isBulkUpdating = false;
 
+    // Bulk remove state
+    @track bulkRemoveConfirmOpen = false;
+    isBulkRemoving = false;
+
     _wiredAccountResult;
     _wiredCampaignResult;
 
@@ -1841,6 +1845,60 @@ export default class AbxTierReview extends LightningElement {
             this.showToast('Error', 'Bulk update failed: ' + this.reduceErrors(error), 'error');
         } finally {
             this.isBulkUpdating = false;
+        }
+    }
+
+    // ─── Bulk Remove from ABX ──────────────────────────────────────────────
+
+    handleBulkRemoveClick() {
+        this.bulkRemoveConfirmOpen = true;
+    }
+
+    handleBulkRemoveCancel() {
+        this.bulkRemoveConfirmOpen = false;
+    }
+
+    async handleBulkRemoveConfirm() {
+        const accountIds = [...this.selectedIds];
+        if (!accountIds.length) return;
+
+        this.isBulkRemoving = true;
+        try {
+            const changes = accountIds.map(id => ({
+                accountId: id,
+                action: 'Remove',
+                tier: null,
+            }));
+
+            const BATCH_SIZE = 100;
+            let totalRemoved = 0;
+            const allErrors = [];
+
+            for (let i = 0; i < changes.length; i += BATCH_SIZE) {
+                const batch = changes.slice(i, i + BATCH_SIZE);
+                const result = await applyTierChanges({ changesJson: JSON.stringify(batch) });
+                totalRemoved += result.removed || 0;
+                if (result.errors && result.errors.length) {
+                    allErrors.push(...result.errors);
+                }
+            }
+
+            if (allErrors.length === 0) {
+                this.showToast('Success',
+                    `Removed ${totalRemoved} account(s) from ABX.`, 'success');
+            } else {
+                this.showToast('Warning',
+                    `Removed with ${allErrors.length} error(s): ${allErrors.slice(0, 5).join('; ')}`, 'warning');
+            }
+
+            this.bulkRemoveConfirmOpen = false;
+            this.selectedIds = new Set();
+            this._invalidateCaches();
+            await refreshApex(this._wiredAccountResult);
+        } catch (error) {
+            this.showToast('Error', 'Bulk remove failed: ' + this.reduceErrors(error), 'error');
+        } finally {
+            this.isBulkRemoving = false;
         }
     }
 
