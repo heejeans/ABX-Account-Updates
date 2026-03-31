@@ -42,7 +42,7 @@ const FIELD_LABELS = {
   Entered_Closed_Lost_Date__c: 'Entered Closed Lost Date',
 };
 
-export default function AccountCard({ account, isApproved, isRejected, isSelected, onApprove, onReject, onToggleSelect }) {
+export default function AccountCard({ account, isApproved, isRejected, isSelected, onApprove, onReject, onToggleSelect, forceSelectable }) {
   const [expanded, setExpanded] = useState(false);
   const isActionable = account.action !== 'No Change' && account.action !== 'Ignore';
 
@@ -63,8 +63,8 @@ export default function AccountCard({ account, isApproved, isRejected, isSelecte
   return (
     <div className={`account-card${showApprovedCard ? ' account-card--approved' : ''}${showRejectedCard ? ' account-card--rejected' : ''}`}>
       <div className="account-card__main">
-        {/* Checkbox — only for pending actionable rows */}
-        {isActionable && !isApproved && onToggleSelect && (
+        {/* Checkbox — for pending actionable rows or all rows when forceSelectable */}
+        {(forceSelectable || (isActionable && !isApproved)) && onToggleSelect && (
           <div className="account-card__checkbox">
             <input
               type="checkbox"

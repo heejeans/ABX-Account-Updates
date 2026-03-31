@@ -212,3 +212,68 @@
 }
 .btn-reject:hover { background: #fecaca; }
 .btn-reject.active { background: #dc2626; color: #fff; }
+
+.btn-remove-abx {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #b91c1c;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.btn-remove-abx:hover:not(:disabled) { background: #b91c1c; }
+.btn-remove-abx:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-cancel {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-cancel:hover { background: #e5e7eb; }
+
+/* Remove confirmation overlay */
+.remove-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.remove-confirm-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px 24px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  max-width: 400px;
+  width: 90%;
+}
+
+.remove-confirm-panel p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #111827;
+}
+
+.remove-confirm-detail {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+  margin-bottom: 16px !important;
+}
+
+.remove-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

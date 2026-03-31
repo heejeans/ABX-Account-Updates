@@ -353,19 +353,55 @@ export default function App() {
 
   // Only show checkboxes/bulk actions on tabs that have actionable cards
   const isActionableTab = ['Add', 'Remove', 'Reclassify'].includes(activeFilter);
+  const isCurrentABX = activeFilter === 'Current ABX';
+  const showSelection = isActionableTab || isCurrentABX;
 
   // Review tab selection helpers
   const actionableFiltered = useMemo(
     () => filteredAccounts.filter((a) => a.action !== 'No Change' && a.action !== 'Ignore'),
     [filteredAccounts]
   );
-  const allSelected  = actionableFiltered.length > 0 && actionableFiltered.every((a) => selected.has(a.Id));
-  const someSelected = actionableFiltered.some((a) => selected.has(a.Id));
+  // In Current ABX, all accounts are selectable; in actionable tabs, only actionable rows
+  const selectableRows = isCurrentABX ? filteredAccounts : actionableFiltered;
+  const allSelected  = selectableRows.length > 0 && selectableRows.every((a) => selected.has(a.Id));
+  const someSelected = selectableRows.some((a) => selected.has(a.Id));
 
   const handleSelectAll = useCallback(() => {
     if (allSelected) setSelected(new Set());
-    else setSelected(new Set(actionableFiltered.map((a) => a.Id)));
-  }, [allSelected, actionableFiltered]);
+    else setSelected(new Set(selectableRows.map((a) => a.Id)));
+  }, [allSelected, selectableRows]);
+
+  // Bulk remove from ABX (Current ABX tab)
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  const handleBulkRemove = useCallback(async () => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    setIsRemoving(true);
+    try {
+      const changes = ids.map((id) => ({ accountId: id, action: 'Remove', tier: null }));
+      const res = await fetch('/api/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes }),
+      });
+      if (res.ok) {
+        // Refresh accounts from server
+        const acctRes = await fetch('/api/accounts');
+        if (acctRes.ok) {
+          const data = await acctRes.json();
+          accountsLengthRef.current = data.length;
+          setAccounts(data);
+        }
+        setSelected(new Set());
+        setApproved(new Set());
+        setRejected(new Set());
+      }
+    } catch (_) {}
+    setIsRemoving(false);
+    setShowRemoveConfirm(false);
+  }, [selected]);
 
   // Keep select-all checkbox indeterminate state in sync
   useEffect(() => {
@@ -420,7 +456,7 @@ export default function App() {
               <>
                 <div className="list-toolbar">
                   <div className="list-toolbar__left">
-                    {isActionableTab && actionableFiltered.length > 0 && (
+                    {showSelection && selectableRows.length > 0 && (
                       <label className="select-all-label">
                         <input
                           ref={selectAllRef}
@@ -445,6 +481,32 @@ export default function App() {
                         </span>
                         <button className="btn-approve" onClick={handleApproveSelected}>✓ Approve</button>
                         <button className="btn-reject" onClick={handleRejectSelected}>✕ Reject</button>
+                      </div>
+                    )}
+                    {isCurrentABX && someSelected && (
+                      <div className="bulk-actions bulk-actions--active">
+                        <span className={`selected-count${allSelected ? ' selected-count--all' : ''}`}>
+                          {allSelected
+                            ? `All ${selectableRows.length} selected`
+                            : `${selectableRows.filter(a => selected.has(a.Id)).length} selected`}
+                        </span>
+                        <button className="btn-remove-abx" onClick={() => setShowRemoveConfirm(true)}>
+                          Remove from ABX
+                        </button>
+                      </div>
+                    )}
+                    {showRemoveConfirm && (
+                      <div className="remove-confirm-overlay" onClick={() => setShowRemoveConfirm(false)}>
+                        <div className="remove-confirm-panel" onClick={(e) => e.stopPropagation()}>
+                          <p>Are you sure you want to remove <strong>{selected.size}</strong> account(s) from ABX?</p>
+                          <p className="remove-confirm-detail">This will clear ABX Tier and ABX Account on each selected account.</p>
+                          <div className="remove-confirm-actions">
+                            <button className="btn-cancel" onClick={() => setShowRemoveConfirm(false)}>Cancel</button>
+                            <button className="btn-remove-abx" onClick={handleBulkRemove} disabled={isRemoving}>
+                              {isRemoving ? 'Removing…' : 'Remove'}
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -477,7 +539,8 @@ export default function App() {
                   selected={selected}
                   onApprove={handleApprove}
                   onReject={handleReject}
-                  onToggleSelect={isActionableTab ? handleToggleSelect : undefined}
+                  onToggleSelect={showSelection ? handleToggleSelect : undefined}
+                  forceSelectable={isCurrentABX}
                 />
               </>
             )}

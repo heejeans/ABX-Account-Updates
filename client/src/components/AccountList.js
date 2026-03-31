@@ -2,7 +2,7 @@ import React from 'react';
 import AccountCard from './AccountCard';
 import './AccountList.css';
 
-export default function AccountList({ accounts, approved, rejected, selected, onApprove, onReject, onToggleSelect }) {
+export default function AccountList({ accounts, approved, rejected, selected, onApprove, onReject, onToggleSelect, forceSelectable }) {
   if (accounts.length === 0) {
     return (
       <div className="account-list__empty">
@@ -23,6 +23,7 @@ export default function AccountList({ accounts, approved, rejected, selected, on
           onApprove={onApprove}
           onReject={onReject}
           onToggleSelect={onToggleSelect}
+          forceSelectable={forceSelectable}
         />
       ))}
     </div>
