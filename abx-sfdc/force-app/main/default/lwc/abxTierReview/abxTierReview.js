@@ -136,10 +136,22 @@ function matchesOperatorFilter(val, filter, filterType) {
         // Text
         const strVal = val != null ? String(val).toLowerCase() : '';
         const fv = filter.value ? filter.value.toLowerCase() : '';
-        if (op === 'eq') return strVal === fv;
-        if (op === 'neq') return strVal !== fv;
-        if (op === 'contains') return strVal.includes(fv);
-        if (op === 'notContains') return !strVal.includes(fv);
+        if (op === 'eq') {
+            const terms = fv.split(',').map(t => t.trim()).filter(Boolean);
+            return terms.length > 0 ? terms.some(t => strVal === t) : strVal === '';
+        }
+        if (op === 'neq') {
+            const terms = fv.split(',').map(t => t.trim()).filter(Boolean);
+            return terms.length > 0 ? terms.every(t => strVal !== t) : strVal !== '';
+        }
+        if (op === 'contains') {
+            const terms = fv.split(',').map(t => t.trim()).filter(Boolean);
+            return terms.length > 0 ? terms.some(t => strVal.includes(t)) : true;
+        }
+        if (op === 'notContains') {
+            const terms = fv.split(',').map(t => t.trim()).filter(Boolean);
+            return terms.length > 0 ? terms.every(t => !strVal.includes(t)) : true;
+        }
     }
     return true;
 }
