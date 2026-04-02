@@ -62,7 +62,7 @@ public class ABXTierService {
         Boolean isClosedLost = (stage == 'Closed Lost');
 
         // Step 1: Focus Account override — runs before full exclusions.
-        // Focus accounts owned by Enterprise AEs bypass isDefunct and Sales Segment
+        // Focus accounts owned by Enterprise AEs bypass isDefunct, Sales Segment, and Gov/Edu
         // exclusions (hand-picked by the AE), but all other exclusions still apply.
         if (acct.Focus_Accounts__c == true) {
             String ownerRole = (acct.Owner != null && acct.Owner.UserRole != null)
@@ -214,7 +214,7 @@ public class ABXTierService {
 
     /**
      * Strict exclusions that apply even to Focus Accounts.
-     * Bypassed for Focus Accounts: isDefunct, Sales Segment, parent account, consulting/IT filter, APAC/LATAM territory.
+     * Bypassed for Focus Accounts: isDefunct, Sales Segment, parent account, consulting/IT filter, government/education filter, APAC/LATAM territory.
      * Still blocks: qualified out, excluded stages, non-Standard type.
      */
     private static List<String> shouldExcludeStrict(Account acct) {
@@ -261,6 +261,9 @@ public class ABXTierService {
         }
         if (acct.Consulting_IT_Filter_Flow__c == true) {
             reasons.add('Consulting/IT filter flow is active');
+        }
+        if (acct.Government_Education__c == true) {
+            reasons.add('Government/Education filter is active');
         }
         if (acct.Account_Stage__c != null && EXCLUDE_STAGES.contains(acct.Account_Stage__c)) {
             reasons.add('Account stage "' + acct.Account_Stage__c + '" is excluded from tiering');

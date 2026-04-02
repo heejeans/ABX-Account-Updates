@@ -36,6 +36,7 @@ const FIELD_LABELS = {
   Account_Stage__c: 'Stage',
   Marketplace_Prospect__c: 'DNN/Marketplace Prospect',
   Consulting_IT_Filter_Flow__c: 'Consulting/IT Filter',
+  Government_Education__c: 'Gov/Edu Filter',
   Company_isDefunct__c: 'Company Defunct',
   Qualified_Out_Detail__c: 'Qualified Out Detail',
   ParentId: 'Parent Account ID',

@@ -36,6 +36,9 @@ function shouldExclude(account) {
   if (account.Consulting_IT_Filter_Flow__c === true || account.Consulting_IT_Filter_Flow__c === 'true') {
     reasons.push('Consulting/IT filter flow is active');
   }
+  if (account.Government_Education__c === true || account.Government_Education__c === 'true') {
+    reasons.push('Government/Education filter is active');
+  }
   if (account.Account_Stage__c && EXCLUDE_STAGES.has(account.Account_Stage__c)) {
     reasons.push(`Account stage "${account.Account_Stage__c}" is excluded from tiering`);
   }

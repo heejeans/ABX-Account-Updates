@@ -21,7 +21,7 @@ public with sharing class ABXTierReviewController {
         'Id, Name, Type, ABX_Tier__c, ABX_Account__c, ABX_Start_Date__c, ' +
         'Fit_Score_Total__c, Account_Intent__c, Account_Stage__c, ' +
         'Sales_Segment__c, Marketplace_Prospect__c, Focus_Accounts__c, ' +
-        'Consulting_IT_Filter_Flow__c, Company_isDefunct__c, ' +
+        'Consulting_IT_Filter_Flow__c, Government_Education__c, Company_isDefunct__c, ' +
         'Qualified_Out_Detail__c, Qualified_Out_Date__c, Qualified_Out_Reason__c, ' +
         'ParentId, Entered_Closed_Lost_Date__c, ' +
         'AE_Territory__c, Account_Executive_Owner__c, Account_Executive_Owner__r.Name, ' +

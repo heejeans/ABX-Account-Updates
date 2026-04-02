@@ -14,6 +14,7 @@ private class ABXTierServiceTest {
             'Sales_Segment__c' => 'Enterprise',
             'Company_isDefunct__c' => 'false',
             'Consulting_IT_Filter_Flow__c' => false,
+            'Government_Education__c' => false,
             'Marketplace_Prospect__c' => false
         };
         if (overrides != null) {
@@ -119,6 +120,44 @@ private class ABXTierServiceTest {
         ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
         System.assertEquals('Ignore', eval.action);
         System.assert(eval.reason.contains('Consulting/IT'), 'Reason should mention consulting');
+    }
+
+    @isTest
+    static void testExclusion_GovernmentEducation() {
+        Account a = buildAccount(new Map<String, Object>{
+            'Government_Education__c' => true
+        });
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Ignore', eval.action);
+        System.assert(eval.reason.contains('Government/Education'), 'Reason should mention Government/Education');
+    }
+
+    @isTest
+    static void testFocusAccount_GovernmentEducationBypassed() {
+        // Gov/Edu filter + Focus + Enterprise AE → filter exclusion is bypassed
+        Account a = (Account) JSON.deserialize(
+            JSON.serialize(new Map<String, Object>{
+                'Name' => 'GovEdu Focus', 'Type' => 'Standard',
+                'Account_Stage__c' => 'Prospect',
+                'Sales_Segment__c' => 'Enterprise',
+                'Company_isDefunct__c' => 'false',
+                'Consulting_IT_Filter_Flow__c' => false,
+                'Government_Education__c' => true,
+                'Marketplace_Prospect__c' => false,
+                'Focus_Accounts__c' => true,
+                'Fit_Score_Total__c' => 12,
+                'Account_Intent__c' => 'High',
+                'Owner' => new Map<String, Object>{
+                    'UserRole' => new Map<String, Object>{ 'Name' => 'Account Executive East' }
+                }
+            }),
+            Account.class
+        );
+
+        ABXTierService.TierEvaluation eval = ABXTierService.evaluateAccount(a);
+        System.assertEquals('Tier 1', eval.recommendedTier, 'Gov/Edu filter should be bypassed for Focus + Enterprise AE');
+        System.assertEquals('Add', eval.action);
     }
 
     @isTest

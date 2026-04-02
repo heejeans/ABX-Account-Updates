@@ -89,7 +89,7 @@ def build():
         [Paragraph("Excluded stage", cell_style), Paragraph("Customer, Pipeline, Churned Customer, Competitor, Parent is Customer, Parent in Pipeline", cell_style)],
         [Paragraph("Sales segment", cell_style), Paragraph("Commercial or Mid-Market", cell_style)],
         [Paragraph("Account type", cell_style), Paragraph("Must be Standard", cell_style)],
-        [Paragraph("Government/Education", cell_style), Paragraph("Government_Education_Filter__c = true", cell_style)],
+        [Paragraph("Government/Education", cell_style), Paragraph("Government_Education__c = true", cell_style)],
     ]
     t = Table(excl_data, colWidths=[2*inch, 4.5*inch])
     t.setStyle(TableStyle([
